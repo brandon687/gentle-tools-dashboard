@@ -8,6 +8,8 @@ import InventoryTable from "@/components/InventoryTable";
 import PivotView from "@/components/PivotView";
 import ItemDetailSheet from "@/components/ItemDetailSheet";
 import InvMatchDialog from "@/components/InvMatchDialog";
+import InventoryFilters from "@/components/InventoryFilters";
+import ExportButtons from "@/components/ExportButtons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Table, Grid3x3, Scan, AlertCircle, Database, AlertTriangle } from "lucide-react";
@@ -20,6 +22,12 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<'table' | 'pivot'>('table');
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
   const [activeDataset, setActiveDataset] = useState<'physical' | 'fallout'>('physical');
+
+  const [filterGrade, setFilterGrade] = useState("");
+  const [filterModel, setFilterModel] = useState("");
+  const [filterGB, setFilterGB] = useState("");
+  const [filterColor, setFilterColor] = useState("");
+  const [filterLockStatus, setFilterLockStatus] = useState("");
 
   const { data: inventoryData, isLoading, error, refetch, isRefetching } = useQuery<InventoryDataResponse>({
     queryKey: ['/api/inventory'],
@@ -34,20 +42,39 @@ export default function Dashboard() {
   }, [inventoryData, activeDataset]);
 
   const filteredItems = useMemo(() => {
-    if (!currentItems) return [];
-    if (!searchQuery.trim()) return currentItems;
-    
-    const query = searchQuery.toLowerCase();
-    return currentItems.filter(item => 
-      item.imei?.toLowerCase().includes(query) ||
-      item.model?.toLowerCase().includes(query) ||
-      item.grade?.toLowerCase().includes(query) ||
-      item.gb?.toLowerCase().includes(query) ||
-      item.color?.toLowerCase().includes(query) ||
-      item.lockStatus?.toLowerCase().includes(query) ||
-      item.concat?.toLowerCase().includes(query)
-    );
-  }, [currentItems, searchQuery]);
+    let items = currentItems;
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      items = items.filter(item => 
+        item.imei?.toLowerCase().includes(query) ||
+        item.model?.toLowerCase().includes(query) ||
+        item.grade?.toLowerCase().includes(query) ||
+        item.gb?.toLowerCase().includes(query) ||
+        item.color?.toLowerCase().includes(query) ||
+        item.lockStatus?.toLowerCase().includes(query) ||
+        item.concat?.toLowerCase().includes(query)
+      );
+    }
+
+    if (filterGrade && filterGrade !== 'all') {
+      items = items.filter(item => item.grade === filterGrade);
+    }
+    if (filterModel && filterModel !== 'all') {
+      items = items.filter(item => item.model === filterModel);
+    }
+    if (filterGB && filterGB !== 'all') {
+      items = items.filter(item => item.gb === filterGB);
+    }
+    if (filterColor && filterColor !== 'all') {
+      items = items.filter(item => item.color === filterColor);
+    }
+    if (filterLockStatus && filterLockStatus !== 'all') {
+      items = items.filter(item => item.lockStatus === filterLockStatus);
+    }
+
+    return items;
+  }, [currentItems, searchQuery, filterGrade, filterModel, filterGB, filterColor, filterLockStatus]);
 
   const handleViewDetails = (item: InventoryItem) => {
     setSelectedItem(item);
@@ -56,6 +83,14 @@ export default function Dashboard() {
 
   const handleRefresh = () => {
     refetch();
+  };
+
+  const handleClearFilters = () => {
+    setFilterGrade("");
+    setFilterModel("");
+    setFilterGB("");
+    setFilterColor("");
+    setFilterLockStatus("");
   };
 
   const allItems = useMemo(() => {
@@ -167,7 +202,9 @@ export default function Dashboard() {
                   </span>
                 </h3>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ExportButtons items={filteredItems} />
+                  
                   <Button
                     variant="outline"
                     onClick={() => setIsInvMatchOpen(true)}
@@ -191,6 +228,21 @@ export default function Dashboard() {
                   </Tabs>
                 </div>
               </div>
+
+              <InventoryFilters
+                items={currentItems}
+                selectedGrade={filterGrade}
+                selectedModel={filterModel}
+                selectedGB={filterGB}
+                selectedColor={filterColor}
+                selectedLockStatus={filterLockStatus}
+                onGradeChange={setFilterGrade}
+                onModelChange={setFilterModel}
+                onGBChange={setFilterGB}
+                onColorChange={setFilterColor}
+                onLockStatusChange={setFilterLockStatus}
+                onClearAll={handleClearFilters}
+              />
 
               {viewMode === 'table' ? (
                 <InventoryTable
@@ -233,19 +285,38 @@ export default function Dashboard() {
                   </span>
                 </h3>
 
-                <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
-                  <TabsList>
-                    <TabsTrigger value="table" data-testid="tab-table-view">
-                      <Table className="w-4 h-4 mr-2" />
-                      Table View
-                    </TabsTrigger>
-                    <TabsTrigger value="pivot" data-testid="tab-pivot-view">
-                      <Grid3x3 className="w-4 h-4 mr-2" />
-                      Pivot View
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ExportButtons items={filteredItems} />
+
+                  <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
+                    <TabsList>
+                      <TabsTrigger value="table" data-testid="tab-table-view">
+                        <Table className="w-4 h-4 mr-2" />
+                        Table View
+                      </TabsTrigger>
+                      <TabsTrigger value="pivot" data-testid="tab-pivot-view">
+                        <Grid3x3 className="w-4 h-4 mr-2" />
+                        Pivot View
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
               </div>
+
+              <InventoryFilters
+                items={currentItems}
+                selectedGrade={filterGrade}
+                selectedModel={filterModel}
+                selectedGB={filterGB}
+                selectedColor={filterColor}
+                selectedLockStatus={filterLockStatus}
+                onGradeChange={setFilterGrade}
+                onModelChange={setFilterModel}
+                onGBChange={setFilterGB}
+                onColorChange={setFilterColor}
+                onLockStatusChange={setFilterLockStatus}
+                onClearAll={handleClearFilters}
+              />
 
               {viewMode === 'table' ? (
                 <InventoryTable
