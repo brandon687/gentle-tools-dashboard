@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { InventoryItem } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight, Copy, Check, Download, ArrowDownWideNarrow, 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { downloadCSV } from "@/lib/exportUtils";
-import { sortModelsByHierarchy } from "@/lib/modelSorting";
+import { sortModelsByHierarchy, sortGBOptions, sortColors } from "@/lib/modelSorting";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface PivotViewProps {
@@ -34,14 +34,15 @@ interface ColorData {
   items: InventoryItem[];
 }
 
-export default function PivotView({ items }: PivotViewProps) {
+const PivotView = memo(({ items }: PivotViewProps) => {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [expandedGB, setExpandedGB] = useState<Set<string>>(new Set());
   const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'quantity' | 'release'>('release');
   const { toast } = useToast();
 
-  const modelData = useMemo(() => {
+  // Separate grouping from sorting for performance - only rebuild when items change
+  const groupedModels = useMemo(() => {
     const models: { [key: string]: ModelData } = {};
     
     items.forEach(item => {
@@ -85,14 +86,17 @@ export default function PivotView({ items }: PivotViewProps) {
       models[model].gbGroups[gb].colorGroups[color].items.push(item);
     });
     
-    const modelList = Object.values(models);
-    
+    return Object.values(models);
+  }, [items]);
+  
+  // Apply sorting separately - cheap operation that doesn't rebuild data structures
+  const modelData = useMemo(() => {
     if (sortMode === 'quantity') {
-      return modelList.sort((a, b) => b.totalDevices - a.totalDevices);
+      return [...groupedModels].sort((a, b) => b.totalDevices - a.totalDevices);
     } else {
-      return modelList.sort((a, b) => sortModelsByHierarchy(a.model, b.model));
+      return [...groupedModels].sort((a, b) => sortModelsByHierarchy(a.model, b.model));
     }
-  }, [items, sortMode]);
+  }, [groupedModels, sortMode]);
 
   const toggleModel = (model: string) => {
     setExpandedModels(prev => {
@@ -389,4 +393,8 @@ export default function PivotView({ items }: PivotViewProps) {
       </div>
     </div>
   );
-}
+});
+
+PivotView.displayName = 'PivotView';
+
+export default PivotView;

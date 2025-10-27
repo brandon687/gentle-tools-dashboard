@@ -36,6 +36,8 @@ export default function Dashboard() {
   const { data: inventoryData, isLoading, error, refetch, isRefetching } = useQuery<InventoryDataResponse>({
     queryKey: ['/api/inventory'],
     refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
 
   const currentItems = useMemo(() => {
