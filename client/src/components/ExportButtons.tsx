@@ -101,7 +101,7 @@ export default function ExportButtons({ items }: ExportButtonsProps) {
         ) : (
           <>
             <Copy className="w-4 h-4 mr-2" />
-            Copy CSV
+            Download as CSV
           </>
         )}
       </Button>

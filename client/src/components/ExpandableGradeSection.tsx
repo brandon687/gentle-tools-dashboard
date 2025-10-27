@@ -340,7 +340,7 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
               data-testid="button-copy-full-data"
             >
               <Copy className="w-4 h-4 mr-2" />
-              Copy Full Data (CSV)
+              Download as CSV
             </Button>
             <Button variant="ghost" onClick={() => setSelectedDevices(null)} data-testid="button-close-devices">
               Close
