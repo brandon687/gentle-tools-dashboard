@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Copy, Check, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Copy, Check, AlertCircle, CheckCircle2, Minus, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -60,15 +60,24 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
     });
   }, [items, selectedModel, selectedGB]);
 
-  const inventoryMap = useMemo(() => {
+  const masterInventoryMap = useMemo(() => {
     const map = new Map<string, InventoryItem>();
-    filteredInventory.forEach(item => {
+    items.forEach(item => {
       if (item.imei) {
         map.set(item.imei.trim(), item);
       }
     });
     return map;
-  }, [filteredInventory]);
+  }, [items]);
+
+  const scannedIMEISet = useMemo(() => {
+    return new Set(
+      pastedIMEIs
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+    );
+  }, [pastedIMEIs]);
 
   const parsedIMEIs = useMemo(() => {
     return pastedIMEIs
@@ -77,25 +86,70 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
       .filter(line => line.length > 0);
   }, [pastedIMEIs]);
 
-  const matchResults = useMemo(() => {
-    const matched: Array<{ imei: string; item: InventoryItem }> = [];
-    const missing: string[] = [];
-    const seen = new Set<string>();
+  const { wrongModelIMEIs, notFoundIMEIs, matchedCount } = useMemo(() => {
+    if (parsedIMEIs.length === 0) {
+      return { wrongModelIMEIs: [], notFoundIMEIs: [], matchedCount: 0 };
+    }
+
+    const filteredIMEISet = new Set(
+      filteredInventory.map(item => item.imei?.trim()).filter(Boolean)
+    );
+
+    const wrongModel: Array<{ imei: string; item: InventoryItem }> = [];
+    const notFound: string[] = [];
+    let matched = 0;
 
     parsedIMEIs.forEach(imei => {
-      if (seen.has(imei)) return; // Skip duplicates
-      seen.add(imei);
-
-      const foundItem = inventoryMap.get(imei);
-      if (foundItem) {
-        matched.push({ imei, item: foundItem });
+      if (filteredIMEISet.has(imei)) {
+        matched++;
       } else {
-        missing.push(imei);
+        const masterItem = masterInventoryMap.get(imei);
+        if (masterItem) {
+          wrongModel.push({ imei, item: masterItem });
+        } else {
+          notFound.push(imei);
+        }
       }
     });
 
-    return { matched, missing };
-  }, [parsedIMEIs, inventoryMap]);
+    return { wrongModelIMEIs: wrongModel, notFoundIMEIs: notFound, matchedCount: matched };
+  }, [parsedIMEIs, filteredInventory, masterInventoryMap]);
+
+  const displayRows = useMemo(() => {
+    if (parsedIMEIs.length === 0) {
+      return filteredInventory.map(item => ({
+        type: 'inventory' as const,
+        item,
+        status: 'unscanned' as const,
+      }));
+    }
+
+    const rows: Array<{
+      type: 'not-found' | 'wrong-model' | 'inventory';
+      item?: InventoryItem;
+      imei?: string;
+      status: 'not-found' | 'wrong-model' | 'matched' | 'unscanned';
+    }> = [];
+
+    notFoundIMEIs.forEach(imei => {
+      rows.push({ type: 'not-found', imei, status: 'not-found' });
+    });
+
+    wrongModelIMEIs.forEach(({ imei, item }) => {
+      rows.push({ type: 'wrong-model', imei, item, status: 'wrong-model' });
+    });
+
+    filteredInventory.forEach(item => {
+      const isMatched = item.imei && scannedIMEISet.has(item.imei.trim());
+      rows.push({
+        type: 'inventory',
+        item,
+        status: isMatched ? 'matched' : 'unscanned',
+      });
+    });
+
+    return rows;
+  }, [filteredInventory, notFoundIMEIs, wrongModelIMEIs, scannedIMEISet, parsedIMEIs.length]);
 
   const copyToClipboard = async (text: string, section: string) => {
     try {
@@ -127,7 +181,7 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
         <DialogHeader>
           <DialogTitle>Inventory Match - Remote Scan</DialogTitle>
           <DialogDescription>
-            Paste IMEIs to compare against your filtered inventory in real-time
+            Filter your inventory and paste scanned IMEIs to see live comparison
           </DialogDescription>
         </DialogHeader>
 
@@ -173,8 +227,9 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
                 <span className="text-sm">
                   Inventory: <strong>{filteredInventory.length}</strong> • 
                   Scanned: <strong>{parsedIMEIs.length}</strong> • 
-                  Matched: <strong className="text-green-600">{matchResults.matched.length}</strong> • 
-                  Missing: <strong className="text-red-600">{matchResults.missing.length}</strong>
+                  Matched: <strong className="text-green-600">{matchedCount}</strong> • 
+                  Wrong Model: <strong className="text-yellow-600">{wrongModelIMEIs.length}</strong> • 
+                  Not Found: <strong className="text-red-600">{notFoundIMEIs.length}</strong>
                 </span>
               </div>
             </div>
@@ -205,33 +260,63 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
 
             <div className="md:col-span-3 space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Live Comparison Results</Label>
+                <Label>
+                  {parsedIMEIs.length === 0 
+                    ? 'Filtered Inventory' 
+                    : 'Live Comparison Results'}
+                </Label>
                 <div className="flex items-center gap-2">
-                  {matchResults.missing.length > 0 && (
+                  {notFoundIMEIs.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => copyToClipboard(matchResults.missing.join('\n'), 'missing')}
-                      data-testid="button-copy-missing"
+                      onClick={() => copyToClipboard(notFoundIMEIs.join('\n'), 'not-found')}
+                      data-testid="button-copy-not-found"
                     >
-                      {copiedSection === 'missing' ? (
+                      {copiedSection === 'not-found' ? (
                         <>
                           <Check className="w-4 h-4 mr-2" />
-                          Copied Missing
+                          Copied Not Found
                         </>
                       ) : (
                         <>
                           <Copy className="w-4 h-4 mr-2" />
-                          Copy Missing ({matchResults.missing.length})
+                          Copy Not Found ({notFoundIMEIs.length})
                         </>
                       )}
                     </Button>
                   )}
-                  {matchResults.matched.length > 0 && (
+                  {wrongModelIMEIs.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => copyToClipboard(matchResults.matched.map(m => m.imei).join('\n'), 'matched')}
+                      onClick={() => copyToClipboard(wrongModelIMEIs.map(w => w.imei).join('\n'), 'wrong-model')}
+                      data-testid="button-copy-wrong-model"
+                    >
+                      {copiedSection === 'wrong-model' ? (
+                        <>
+                          <Check className="w-4 h-4 mr-2" />
+                          Copied Wrong Model
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copy Wrong Model ({wrongModelIMEIs.length})
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {matchedCount > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const matchedIMEIs = filteredInventory
+                          .filter(item => item.imei && scannedIMEISet.has(item.imei.trim()))
+                          .map(item => item.imei)
+                          .filter(Boolean);
+                        copyToClipboard(matchedIMEIs.join('\n'), 'matched');
+                      }}
                       data-testid="button-copy-matched"
                     >
                       {copiedSection === 'matched' ? (
@@ -242,7 +327,7 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
                       ) : (
                         <>
                           <Copy className="w-4 h-4 mr-2" />
-                          Copy Matched ({matchResults.matched.length})
+                          Copy Matched ({matchedCount})
                         </>
                       )}
                     </Button>
@@ -256,54 +341,84 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="w-12">Status</TableHead>
-                        <TableHead>Scanned IMEI</TableHead>
-                        <TableHead>Match Status</TableHead>
+                        <TableHead>IMEI</TableHead>
                         <TableHead>Model</TableHead>
                         <TableHead>GB</TableHead>
                         <TableHead>Color</TableHead>
                         <TableHead>Grade</TableHead>
+                        <TableHead>Lock Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {parsedIMEIs.length === 0 ? (
+                      {displayRows.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            Paste IMEIs in the left panel to see live comparison results
+                            Select Model and GB filters to view inventory
                           </TableCell>
                         </TableRow>
                       ) : (
-                        <>
-                          {matchResults.matched.map((match, idx) => (
-                            <TableRow key={`matched-${idx}`} className="bg-green-50 dark:bg-green-950/20">
+                        displayRows.map((row, idx) => {
+                          if (row.type === 'not-found') {
+                            return (
+                              <TableRow key={`not-found-${idx}`} className="bg-red-50 dark:bg-red-950/20">
+                                <TableCell>
+                                  <AlertCircle className="w-4 h-4 text-red-600" />
+                                </TableCell>
+                                <TableCell className="font-mono text-sm">{row.imei}</TableCell>
+                                <TableCell colSpan={5}>
+                                  <Badge variant="destructive">Not Found in Inventory</Badge>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          }
+
+                          if (row.type === 'wrong-model') {
+                            const item = row.item!;
+                            return (
+                              <TableRow key={`wrong-${idx}`} className="bg-yellow-50 dark:bg-yellow-950/20">
+                                <TableCell>
+                                  <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                                </TableCell>
+                                <TableCell className="font-mono text-sm">{row.imei}</TableCell>
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    <Badge variant="secondary" className="bg-yellow-600 text-white">Wrong Model</Badge>
+                                    <div className="text-xs text-muted-foreground">
+                                      Actually: {item.model} {item.gb}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>{item.gb || '—'}</TableCell>
+                                <TableCell>{item.color || '—'}</TableCell>
+                                <TableCell>{item.grade || '—'}</TableCell>
+                                <TableCell>{item.lockStatus || '—'}</TableCell>
+                              </TableRow>
+                            );
+                          }
+
+                          const item = row.item!;
+                          const bgClass = row.status === 'matched' 
+                            ? 'bg-green-50 dark:bg-green-950/20' 
+                            : '';
+
+                          return (
+                            <TableRow key={`inv-${idx}`} className={bgClass}>
                               <TableCell>
-                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                {row.status === 'matched' ? (
+                                  <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                ) : (
+                                  <Minus className="w-4 h-4 text-muted-foreground" />
+                                )}
                               </TableCell>
-                              <TableCell className="font-mono text-sm">{match.imei}</TableCell>
-                              <TableCell>
-                                <Badge variant="default" className="bg-green-600">Matched</Badge>
-                              </TableCell>
-                              <TableCell>{match.item.model}</TableCell>
-                              <TableCell>{match.item.gb}</TableCell>
-                              <TableCell>{match.item.color}</TableCell>
-                              <TableCell>{match.item.grade}</TableCell>
+                              <TableCell className="font-mono text-sm">{item.imei || '—'}</TableCell>
+                              <TableCell>{item.model || '—'}</TableCell>
+                              <TableCell>{item.gb || '—'}</TableCell>
+                              <TableCell>{item.color || '—'}</TableCell>
+                              <TableCell>{item.grade || '—'}</TableCell>
+                              <TableCell>{item.lockStatus || '—'}</TableCell>
                             </TableRow>
-                          ))}
-                          {matchResults.missing.map((imei, idx) => (
-                            <TableRow key={`missing-${idx}`} className="bg-red-50 dark:bg-red-950/20">
-                              <TableCell>
-                                <AlertCircle className="w-4 h-4 text-red-600" />
-                              </TableCell>
-                              <TableCell className="font-mono text-sm">{imei}</TableCell>
-                              <TableCell>
-                                <Badge variant="destructive">Not Found</Badge>
-                              </TableCell>
-                              <TableCell className="text-muted-foreground">—</TableCell>
-                              <TableCell className="text-muted-foreground">—</TableCell>
-                              <TableCell className="text-muted-foreground">—</TableCell>
-                              <TableCell className="text-muted-foreground">—</TableCell>
-                            </TableRow>
-                          ))}
-                        </>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
