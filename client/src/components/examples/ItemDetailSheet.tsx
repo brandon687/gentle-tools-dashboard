@@ -9,18 +9,14 @@ export default function ItemDetailSheetExample() {
   const mockItem: InventoryItem = {
     id: "1",
     imei: "356938035643809",
-    deviceModel: "iPhone 14 Pro",
-    brand: "Apple",
-    status: "In Stock",
-    location: "Warehouse A",
-    condition: "New",
-    stockLevel: 15,
-    category: "Smartphones",
-    serialNumber: "F2LW3456789",
-    purchaseDate: "2024-01-15",
-    price: 999,
-    supplier: "Tech Distributors Inc",
-    notes: "Premium device with original packaging",
+    grade: "A",
+    model: "iPhone 14 Pro",
+    gb: "256GB",
+    color: "Space Black",
+    lockStatus: "Unlocked",
+    date: "2024-01-15",
+    concat: "iPhone 14 Pro 256GB Space Black",
+    age: "45 days",
   };
 
   return (

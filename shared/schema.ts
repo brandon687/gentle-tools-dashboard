@@ -20,25 +20,20 @@ export type User = typeof users.$inferSelect;
 export interface InventoryItem {
   id: string;
   imei?: string;
-  deviceModel?: string;
-  brand?: string;
-  status?: string;
-  location?: string;
-  condition?: string;
-  stockLevel?: number;
-  category?: string;
-  serialNumber?: string;
-  purchaseDate?: string;
-  price?: number;
-  supplier?: string;
-  notes?: string;
+  grade?: string;
+  model?: string;
+  gb?: string;
+  color?: string;
+  lockStatus?: string;
+  date?: string;
+  concat?: string;
+  age?: string;
   [key: string]: any;
 }
 
 export interface InventoryStats {
   totalDevices: number;
-  inStock: number;
-  lowStock: number;
-  outOfStock: number;
-  categories: { name: string; count: number }[];
+  byGrade: { grade: string; count: number }[];
+  byModel: { model: string; count: number }[];
+  byLockStatus: { status: string; count: number }[];
 }

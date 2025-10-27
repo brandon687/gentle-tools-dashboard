@@ -55,15 +55,16 @@ export default function InventoryTable({ items, onViewDetails }: InventoryTableP
     return 0;
   });
 
-  const getStatusBadgeVariant = (status?: string) => {
-    switch (status?.toLowerCase()) {
-      case 'in stock':
-      case 'available':
+  const getGradeBadgeVariant = (grade?: string) => {
+    switch (grade?.toUpperCase()) {
+      case 'A':
+      case 'A+':
         return 'default';
-      case 'low stock':
+      case 'B':
+      case 'B+':
         return 'secondary';
-      case 'out of stock':
-        return 'destructive';
+      case 'C':
+        return 'outline';
       default:
         return 'outline';
     }
@@ -95,56 +96,65 @@ export default function InventoryTable({ items, onViewDetails }: InventoryTableP
               </TableHead>
               <TableHead 
                 className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('deviceModel')}
+                onClick={() => handleSort('grade')}
               >
                 <div className="flex items-center">
-                  Device Model
-                  <SortIcon field="deviceModel" />
+                  GRADE
+                  <SortIcon field="grade" />
                 </div>
               </TableHead>
               <TableHead 
                 className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('brand')}
+                onClick={() => handleSort('model')}
               >
                 <div className="flex items-center">
-                  Brand
-                  <SortIcon field="brand" />
+                  MODEL
+                  <SortIcon field="model" />
                 </div>
               </TableHead>
               <TableHead 
                 className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('status')}
+                onClick={() => handleSort('gb')}
               >
                 <div className="flex items-center">
-                  Status
-                  <SortIcon field="status" />
+                  GB
+                  <SortIcon field="gb" />
                 </div>
               </TableHead>
               <TableHead 
                 className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('location')}
+                onClick={() => handleSort('color')}
               >
                 <div className="flex items-center">
-                  Location
-                  <SortIcon field="location" />
+                  COLOR
+                  <SortIcon field="color" />
                 </div>
               </TableHead>
               <TableHead 
                 className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('condition')}
+                onClick={() => handleSort('lockStatus')}
               >
                 <div className="flex items-center">
-                  Condition
-                  <SortIcon field="condition" />
+                  LOCK STATUS
+                  <SortIcon field="lockStatus" />
                 </div>
               </TableHead>
               <TableHead 
                 className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('stockLevel')}
+                onClick={() => handleSort('date')}
               >
                 <div className="flex items-center">
-                  Stock
-                  <SortIcon field="stockLevel" />
+                  DATE
+                  <SortIcon field="date" />
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover-elevate"
+                onClick={() => handleSort('age')}
+              >
+                <div className="flex items-center">
+                  AGE
+                  <SortIcon field="age" />
                 </div>
               </TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -153,7 +163,7 @@ export default function InventoryTable({ items, onViewDetails }: InventoryTableP
           <TableBody>
             {sortedItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                   No devices found. Try adjusting your search.
                 </TableCell>
               </TableRow>
@@ -167,18 +177,19 @@ export default function InventoryTable({ items, onViewDetails }: InventoryTableP
                   <TableCell className="font-mono text-sm" data-testid={`text-imei-${index}`}>
                     {item.imei || '—'}
                   </TableCell>
-                  <TableCell data-testid={`text-model-${index}`}>{item.deviceModel || '—'}</TableCell>
-                  <TableCell data-testid={`text-brand-${index}`}>{item.brand || '—'}</TableCell>
                   <TableCell>
-                    {item.status && (
-                      <Badge variant={getStatusBadgeVariant(item.status)} data-testid={`badge-status-${index}`}>
-                        {item.status}
+                    {item.grade ? (
+                      <Badge variant={getGradeBadgeVariant(item.grade)} data-testid={`badge-grade-${index}`}>
+                        {item.grade}
                       </Badge>
-                    )}
+                    ) : '—'}
                   </TableCell>
-                  <TableCell data-testid={`text-location-${index}`}>{item.location || '—'}</TableCell>
-                  <TableCell data-testid={`text-condition-${index}`}>{item.condition || '—'}</TableCell>
-                  <TableCell data-testid={`text-stock-${index}`}>{item.stockLevel ?? '—'}</TableCell>
+                  <TableCell data-testid={`text-model-${index}`}>{item.model || '—'}</TableCell>
+                  <TableCell data-testid={`text-gb-${index}`}>{item.gb || '—'}</TableCell>
+                  <TableCell data-testid={`text-color-${index}`}>{item.color || '—'}</TableCell>
+                  <TableCell data-testid={`text-lockstatus-${index}`}>{item.lockStatus || '—'}</TableCell>
+                  <TableCell data-testid={`text-date-${index}`}>{item.date || '—'}</TableCell>
+                  <TableCell data-testid={`text-age-${index}`}>{item.age || '—'}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"

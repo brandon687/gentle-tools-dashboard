@@ -18,15 +18,16 @@ interface ItemDetailSheetProps {
 export default function ItemDetailSheet({ item, open, onOpenChange }: ItemDetailSheetProps) {
   if (!item) return null;
 
-  const getStatusBadgeVariant = (status?: string) => {
-    switch (status?.toLowerCase()) {
-      case 'in stock':
-      case 'available':
+  const getGradeBadgeVariant = (grade?: string) => {
+    switch (grade?.toUpperCase()) {
+      case 'A':
+      case 'A+':
         return 'default';
-      case 'low stock':
+      case 'B':
+      case 'B+':
         return 'secondary';
-      case 'out of stock':
-        return 'destructive';
+      case 'C':
+        return 'outline';
       default:
         return 'outline';
     }
@@ -39,8 +40,8 @@ export default function ItemDetailSheet({ item, open, onOpenChange }: ItemDetail
       <div className="grid grid-cols-3 gap-4 py-3">
         <div className="text-sm font-medium text-muted-foreground">{label}</div>
         <div className="col-span-2 text-sm" data-testid={`text-detail-${label.toLowerCase().replace(/\s+/g, '-')}`}>
-          {label === 'Status' && typeof value === 'string' ? (
-            <Badge variant={getStatusBadgeVariant(value)}>{value}</Badge>
+          {label === 'Grade' && typeof value === 'string' ? (
+            <Badge variant={getGradeBadgeVariant(value)}>{value}</Badge>
           ) : (
             value.toString()
           )}
@@ -54,7 +55,7 @@ export default function ItemDetailSheet({ item, open, onOpenChange }: ItemDetail
       <SheetContent className="sm:max-w-2xl overflow-y-auto" data-testid="sheet-item-details">
         <SheetHeader>
           <SheetTitle data-testid="text-detail-title">
-            {item.deviceModel || 'Device Details'}
+            {item.model || 'Device Details'}
           </SheetTitle>
           <SheetDescription>
             View complete information for this inventory item
@@ -64,29 +65,21 @@ export default function ItemDetailSheet({ item, open, onOpenChange }: ItemDetail
         <div className="mt-6 space-y-1">
           <DetailRow label="IMEI" value={item.imei} />
           <Separator />
-          <DetailRow label="Device Model" value={item.deviceModel} />
+          <DetailRow label="Grade" value={item.grade} />
           <Separator />
-          <DetailRow label="Brand" value={item.brand} />
+          <DetailRow label="Model" value={item.model} />
           <Separator />
-          <DetailRow label="Status" value={item.status} />
+          <DetailRow label="Storage (GB)" value={item.gb} />
           <Separator />
-          <DetailRow label="Location" value={item.location} />
+          <DetailRow label="Color" value={item.color} />
           <Separator />
-          <DetailRow label="Condition" value={item.condition} />
+          <DetailRow label="Lock Status" value={item.lockStatus} />
           <Separator />
-          <DetailRow label="Stock Level" value={item.stockLevel} />
+          <DetailRow label="Date" value={item.date} />
           <Separator />
-          <DetailRow label="Category" value={item.category} />
+          <DetailRow label="Concatenated Info" value={item.concat} />
           <Separator />
-          <DetailRow label="Serial Number" value={item.serialNumber} />
-          <Separator />
-          <DetailRow label="Purchase Date" value={item.purchaseDate} />
-          <Separator />
-          <DetailRow label="Price" value={item.price ? `$${item.price}` : undefined} />
-          <Separator />
-          <DetailRow label="Supplier" value={item.supplier} />
-          <Separator />
-          <DetailRow label="Notes" value={item.notes} />
+          <DetailRow label="Age" value={item.age} />
         </div>
       </SheetContent>
     </Sheet>
