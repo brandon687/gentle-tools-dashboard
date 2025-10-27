@@ -1,70 +1,113 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { InventoryItem } from "@shared/schema";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Eye, Copy, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { downloadCSV } from "@/lib/exportUtils";
 
 interface PivotViewProps {
   items: InventoryItem[];
   onViewDetails: (item: InventoryItem) => void;
 }
 
-interface GroupedData {
-  [key: string]: InventoryItem[];
+interface ModelData {
+  model: string;
+  totalDevices: number;
+  items: InventoryItem[];
+  gbGroups: { [gb: string]: GBData };
 }
 
-export default function PivotView({ items, onViewDetails }: PivotViewProps) {
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<'sku' | 'grade' | 'model' | 'lockStatus' | 'color'>('sku');
+interface GBData {
+  gb: string;
+  totalDevices: number;
+  items: InventoryItem[];
+  colorGroups: { [color: string]: ColorData };
+}
+
+interface ColorData {
+  color: string;
+  totalDevices: number;
+  items: InventoryItem[];
+}
+
+export default function PivotView({ items }: PivotViewProps) {
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
+  const [expandedGB, setExpandedGB] = useState<Set<string>>(new Set());
   const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const groupByField = (field: keyof InventoryItem): GroupedData => {
-    const grouped: GroupedData = {};
+  const modelData = useMemo(() => {
+    const models: { [key: string]: ModelData } = {};
+    
     items.forEach(item => {
-      const key = (item[field] as string) || 'Unknown';
-      if (!grouped[key]) {
-        grouped[key] = [];
+      const model = item.model || 'Unknown';
+      const gb = item.gb || 'Unknown';
+      const color = item.color || 'Unknown';
+      
+      if (!models[model]) {
+        models[model] = {
+          model,
+          totalDevices: 0,
+          items: [],
+          gbGroups: {}
+        };
       }
-      grouped[key].push(item);
-    });
-    return grouped;
-  };
-
-  const groupBySKU = (): GroupedData => {
-    const grouped: GroupedData = {};
-    items.forEach(item => {
-      const sku = `${item.model || 'Unknown'} ${item.gb || ''} ${item.color || ''}`.trim();
-      if (!grouped[sku]) {
-        grouped[sku] = [];
+      
+      models[model].totalDevices++;
+      models[model].items.push(item);
+      
+      if (!models[model].gbGroups[gb]) {
+        models[model].gbGroups[gb] = {
+          gb,
+          totalDevices: 0,
+          items: [],
+          colorGroups: {}
+        };
       }
-      grouped[sku].push(item);
+      
+      models[model].gbGroups[gb].totalDevices++;
+      models[model].gbGroups[gb].items.push(item);
+      
+      if (!models[model].gbGroups[gb].colorGroups[color]) {
+        models[model].gbGroups[gb].colorGroups[color] = {
+          color,
+          totalDevices: 0,
+          items: []
+        };
+      }
+      
+      models[model].gbGroups[gb].colorGroups[color].totalDevices++;
+      models[model].gbGroups[gb].colorGroups[color].items.push(item);
     });
-    return grouped;
+    
+    return Object.values(models).sort((a, b) => b.totalDevices - a.totalDevices);
+  }, [items]);
+
+  const toggleModel = (model: string) => {
+    setExpandedModels(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(model)) {
+        newSet.delete(model);
+      } else {
+        newSet.add(model);
+      }
+      return newSet;
+    });
   };
 
-  const groupedBySKU = groupBySKU();
-  const groupedByGrade = groupByField('grade');
-  const groupedByModel = groupByField('model');
-  const groupedByLockStatus = groupByField('lockStatus');
-  const groupedByColor = groupByField('color');
-
-  const getCurrentGrouped = () => {
-    switch (selectedCategory) {
-      case 'sku': return groupedBySKU;
-      case 'grade': return groupedByGrade;
-      case 'model': return groupedByModel;
-      case 'lockStatus': return groupedByLockStatus;
-      case 'color': return groupedByColor;
-      default: return groupedBySKU;
-    }
+  const toggleGB = (modelGbKey: string) => {
+    setExpandedGB(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(modelGbKey)) {
+        newSet.delete(modelGbKey);
+      } else {
+        newSet.add(modelGbKey);
+      }
+      return newSet;
+    });
   };
-
-  const currentGrouped = getCurrentGrouped();
-  const displayedItems = selectedGroup ? currentGrouped[selectedGroup] || [] : [];
 
   const copyIMEIsToClipboard = async (items: InventoryItem[], groupKey: string) => {
     const imeis = items
@@ -77,7 +120,7 @@ export default function PivotView({ items, onViewDetails }: PivotViewProps) {
       setCopiedGroup(groupKey);
       toast({
         title: "IMEIs Copied!",
-        description: `${items.length} IMEI(s) copied to clipboard. Ready to paste into Google Sheets.`,
+        description: `${items.length} IMEI(s) copied to clipboard.`,
       });
       setTimeout(() => setCopiedGroup(null), 2000);
     } catch (err) {
@@ -89,219 +132,235 @@ export default function PivotView({ items, onViewDetails }: PivotViewProps) {
     }
   };
 
-  const getGradeBadgeVariant = (grade?: string) => {
-    const normalizedGrade = grade?.toUpperCase().trim();
-    switch (normalizedGrade) {
-      case 'A1 GRADE':
-      case 'A1':
-        return 'default';
-      case 'A GRADE':
-      case 'A':
-        return 'secondary';
-      case 'AB GRADE':
-      case 'AB':
-        return 'outline';
-      default:
-        return 'outline';
-    }
+  const downloadFullData = (items: InventoryItem[], filename: string) => {
+    downloadCSV(items, filename);
+    toast({
+      title: "CSV Downloaded",
+      description: `${items.length} device(s) exported successfully.`,
+    });
   };
 
   return (
-    <div className="space-y-6">
-      <Tabs value={selectedCategory} onValueChange={(value) => {
-        setSelectedCategory(value as any);
-        setSelectedGroup(null);
-      }}>
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="sku" data-testid="tab-sku">By SKU</TabsTrigger>
-          <TabsTrigger value="grade" data-testid="tab-grade">By Grade</TabsTrigger>
-          <TabsTrigger value="model" data-testid="tab-model">By Model</TabsTrigger>
-          <TabsTrigger value="lockStatus" data-testid="tab-lockstatus">By Lock Status</TabsTrigger>
-          <TabsTrigger value="color" data-testid="tab-color">By Color</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={selectedCategory} className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {Object.entries(currentGrouped)
-              .sort((a, b) => b[1].length - a[1].length)
-              .map(([key, groupItems]) => (
-                <Card
-                  key={key}
-                  className={`p-4 ${
-                    selectedGroup === key ? 'ring-2 ring-primary' : ''
-                  }`}
-                  data-testid={`card-group-${key.toLowerCase().replace(/\s+/g, '-')}`}
-                >
-                  <div className="space-y-3">
-                    <div 
-                      className="cursor-pointer hover-elevate active-elevate-2 rounded-md -m-4 p-4"
-                      onClick={() => setSelectedGroup(selectedGroup === key ? null : key)}
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          {selectedCategory === 'grade' ? (
-                            <Badge variant={getGradeBadgeVariant(key)} className="text-sm">
-                              {key}
-                            </Badge>
-                          ) : (
-                            <p className="font-medium text-sm truncate" title={key}>
-                              {key}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                          <p className="text-2xl font-bold" data-testid={`text-count-${key.toLowerCase().replace(/\s+/g, '-')}`}>
-                            {groupItems.length}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {groupItems.length === 1 ? 'device' : 'devices'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {groupItems.length >= 1 && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyIMEIsToClipboard(groupItems, key);
-                        }}
-                        data-testid={`button-copy-imeis-${key.toLowerCase().replace(/\s+/g, '-')}`}
-                      >
-                        {copiedGroup === key ? (
-                          <>
-                            <Check className="w-4 h-4 mr-2" />
-                            Copied!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4 mr-2" />
-                            Copy {groupItems.length} {groupItems.length === 1 ? 'IMEI' : 'IMEIs'}
-                          </>
-                        )}
-                      </Button>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {modelData.map((modelGroup) => {
+          const isModelExpanded = expandedModels.has(modelGroup.model);
+          
+          return (
+            <Card
+              key={modelGroup.model}
+              className="overflow-hidden"
+              data-testid={`card-model-${modelGroup.model.toLowerCase().replace(/\s+/g, '-')}`}
+            >
+              <div
+                className="p-4 cursor-pointer hover-elevate active-elevate-2"
+                onClick={() => toggleModel(modelGroup.model)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {isModelExpanded ? (
+                      <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 flex-shrink-0" />
                     )}
-                  </div>
-                </Card>
-              ))}
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {selectedGroup && displayedItems.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <h3 className="text-lg font-semibold">
-              {selectedGroup} - {displayedItems.length} {displayedItems.length === 1 ? 'Device' : 'Devices'}
-            </h3>
-            <div className="flex items-center gap-2">
-              {displayedItems.length >= 1 && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => copyIMEIsToClipboard(displayedItems, selectedGroup)}
-                  data-testid="button-copy-all-imeis"
-                >
-                  {copiedGroup === selectedGroup ? (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      Copied {displayedItems.length} {displayedItems.length === 1 ? 'IMEI' : 'IMEIs'}
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy All IMEIs
-                    </>
-                  )}
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedGroup(null)}
-                data-testid="button-clear-selection"
-              >
-                Clear Selection
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayedItems.map((item, index) => (
-              <Card
-                key={item.id || index}
-                className="p-4 hover-elevate"
-                data-testid={`card-device-${index}`}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <p className="font-semibold truncate" title={item.model}>
-                        {item.model}
-                      </p>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {item.gb} • {item.color}
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate" title={modelGroup.model}>
+                        {modelGroup.model}
                       </p>
                     </div>
-                    {item.grade && (
-                      <Badge variant={getGradeBadgeVariant(item.grade)} className="flex-shrink-0">
-                        {item.grade}
-                      </Badge>
-                    )}
                   </div>
+                </div>
+                <div className="flex items-baseline gap-2 mt-2 ml-6">
+                  <p className="text-2xl font-bold" data-testid={`text-model-count-${modelGroup.model.toLowerCase().replace(/\s+/g, '-')}`}>
+                    {modelGroup.totalDevices}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {modelGroup.totalDevices === 1 ? 'device' : 'devices'}
+                  </p>
+                </div>
+              </div>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs gap-2">
-                      <span className="text-muted-foreground">IMEI</span>
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono truncate">{item.imei}</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5 flex-shrink-0"
-                          onClick={async () => {
-                            if (item.imei) {
-                              await navigator.clipboard.writeText(item.imei);
-                              toast({
-                                title: "IMEI Copied",
-                                description: item.imei,
-                              });
-                            }
-                          }}
-                        >
-                          <Copy className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Lock</span>
-                      <span>{item.lockStatus}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Age</span>
-                      <span>{item.age}</span>
-                    </div>
-                  </div>
-
+              <div className="px-4 pb-4 space-y-2">
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full"
-                    onClick={() => onViewDetails(item)}
-                    data-testid={`button-view-device-${index}`}
+                    className="flex-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyIMEIsToClipboard(modelGroup.items, `model-${modelGroup.model}`);
+                    }}
+                    data-testid={`button-copy-model-${modelGroup.model.toLowerCase().replace(/\s+/g, '-')}`}
                   >
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Details
+                    {copiedGroup === `model-${modelGroup.model}` ? (
+                      <>
+                        <Check className="w-4 h-4 mr-2" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy IMEIs
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadFullData(modelGroup.items, `${modelGroup.model}.csv`);
+                    }}
+                    data-testid={`button-download-model-${modelGroup.model.toLowerCase().replace(/\s+/g, '-')}`}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download CSV
                   </Button>
                 </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+
+                {isModelExpanded && (
+                  <div className="space-y-2 pt-2 border-t">
+                    {Object.values(modelGroup.gbGroups)
+                      .sort((a, b) => {
+                        const aNum = parseInt(a.gb) || 0;
+                        const bNum = parseInt(b.gb) || 0;
+                        return bNum - aNum;
+                      })
+                      .map((gbGroup) => {
+                        const gbKey = `${modelGroup.model}-${gbGroup.gb}`;
+                        const isGBExpanded = expandedGB.has(gbKey);
+
+                        return (
+                          <div key={gbKey} className="space-y-2">
+                            <div
+                              className="p-2 rounded-md cursor-pointer hover-elevate active-elevate-2 bg-muted/50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleGB(gbKey);
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {isGBExpanded ? (
+                                    <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                                  ) : (
+                                    <ChevronRight className="w-3 h-3 flex-shrink-0" />
+                                  )}
+                                  <p className="text-sm font-medium">{gbGroup.gb}</p>
+                                </div>
+                                <Badge variant="secondary" className="flex-shrink-0">
+                                  {gbGroup.totalDevices}
+                                </Badge>
+                              </div>
+                            </div>
+                            
+                            <div className="flex gap-1 ml-5">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="flex-1 h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyIMEIsToClipboard(gbGroup.items, gbKey);
+                                }}
+                                data-testid={`button-copy-gb-${gbKey.toLowerCase().replace(/\s+/g, '-')}`}
+                              >
+                                {copiedGroup === gbKey ? (
+                                  <>
+                                    <Check className="w-3 h-3 mr-1" />
+                                    Copied
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3 mr-1" />
+                                    Copy
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  downloadFullData(gbGroup.items, `${modelGroup.model}-${gbGroup.gb}.csv`);
+                                }}
+                                data-testid={`button-download-gb-${gbKey.toLowerCase().replace(/\s+/g, '-')}`}
+                              >
+                                <Download className="w-3 h-3" />
+                              </Button>
+                            </div>
+
+                            {isGBExpanded && (
+                              <div className="ml-5 space-y-1">
+                                {Object.values(gbGroup.colorGroups)
+                                  .sort((a, b) => b.totalDevices - a.totalDevices)
+                                  .map((colorGroup) => {
+                                    const colorKey = `${gbKey}-${colorGroup.color}`;
+                                    
+                                    return (
+                                      <div
+                                        key={colorKey}
+                                        className="p-2 rounded-md bg-muted/30"
+                                      >
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                          <p className="text-sm">{colorGroup.color}</p>
+                                          <Badge variant="outline" className="flex-shrink-0">
+                                            {colorGroup.totalDevices}
+                                          </Badge>
+                                        </div>
+                                        <div className="flex gap-1">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="flex-1 h-7 text-xs"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              copyIMEIsToClipboard(colorGroup.items, colorKey);
+                                            }}
+                                            data-testid={`button-copy-color-${colorKey.toLowerCase().replace(/\s+/g, '-')}`}
+                                          >
+                                            {copiedGroup === colorKey ? (
+                                              <>
+                                                <Check className="w-3 h-3 mr-1" />
+                                                Copied
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Copy className="w-3 h-3 mr-1" />
+                                                Copy
+                                              </>
+                                            )}
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 px-2"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              downloadFullData(colorGroup.items, `${modelGroup.model}-${gbGroup.gb}-${colorGroup.color}.csv`);
+                                            }}
+                                            data-testid={`button-download-color-${colorKey.toLowerCase().replace(/\s+/g, '-')}`}
+                                          >
+                                            <Download className="w-3 h-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { convertToCSV, downloadCSV as downloadCSVUtil } from "@/lib/exportUtils";
 
 interface ExportButtonsProps {
   items: InventoryItem[];
@@ -12,40 +13,8 @@ export default function ExportButtons({ items }: ExportButtonsProps) {
   const { toast } = useToast();
   const [copiedState, setCopiedState] = useState(false);
 
-  const convertToCSV = (data: InventoryItem[]): string => {
-    if (data.length === 0) return '';
-
-    const headers = ['IMEI', 'MODEL', 'GB', 'COLOR', 'LOCK STATUS', 'GRADE'];
-    const csvRows = [headers.join(',')];
-
-    data.forEach(item => {
-      const row = [
-        item.imei || '',
-        item.model || '',
-        item.gb || '',
-        item.color || '',
-        item.lockStatus || '',
-        item.grade || '',
-      ].map(field => `"${field}"`);
-      csvRows.push(row.join(','));
-    });
-
-    return csvRows.join('\n');
-  };
-
   const downloadCSV = () => {
-    const csv = convertToCSV(items);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `inventory_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
+    downloadCSVUtil(items);
     toast({
       title: "CSV Downloaded",
       description: `${items.length} items exported successfully.`,
