@@ -16,10 +16,10 @@ export interface SheetRow {
 }
 
 export async function fetchInventoryData(): Promise<SheetRow[]> {
-  const apiKey = process.env.GOOGLE_SHEETS_API_KEY;
+  const apiKey = process.env.GOOGLE_API_KEY;
   
   if (!apiKey) {
-    throw new Error('GOOGLE_SHEETS_API_KEY is not configured');
+    throw new Error('GOOGLE_API_KEY is not configured');
   }
 
   const sheets = google.sheets({ version: 'v4', auth: apiKey });
