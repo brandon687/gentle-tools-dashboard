@@ -302,11 +302,11 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead>IMEI</TableHead>
-                  <TableHead>Model</TableHead>
+                  <TableHead>MODEL</TableHead>
                   <TableHead>GB</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead>Color</TableHead>
-                  <TableHead>Lock Status</TableHead>
+                  <TableHead>COLOR</TableHead>
+                  <TableHead>LOCK STATUS</TableHead>
+                  <TableHead>GRADE</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -319,9 +319,9 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
                     <TableCell className="font-mono text-sm">{device.imei || 'N/A'}</TableCell>
                     <TableCell>{device.model || 'N/A'}</TableCell>
                     <TableCell>{device.gb || 'N/A'}</TableCell>
-                    <TableCell>{device.grade || 'N/A'}</TableCell>
                     <TableCell>{device.color || 'N/A'}</TableCell>
                     <TableCell>{device.lockStatus || 'N/A'}</TableCell>
+                    <TableCell>{device.grade || 'N/A'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

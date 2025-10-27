@@ -50,6 +50,10 @@ const MemoizedRow = memo(({ item, index, onViewDetails }: {
       <TableCell className="font-mono text-sm" data-testid={`text-imei-${index}`}>
         {item.imei || '—'}
       </TableCell>
+      <TableCell data-testid={`text-model-${index}`}>{item.model || '—'}</TableCell>
+      <TableCell data-testid={`text-gb-${index}`}>{item.gb || '—'}</TableCell>
+      <TableCell data-testid={`text-color-${index}`}>{item.color || '—'}</TableCell>
+      <TableCell data-testid={`text-lockstatus-${index}`}>{item.lockStatus || '—'}</TableCell>
       <TableCell>
         {item.grade ? (
           <Badge variant={getGradeBadgeVariant(item.grade)} data-testid={`badge-grade-${index}`}>
@@ -57,12 +61,6 @@ const MemoizedRow = memo(({ item, index, onViewDetails }: {
           </Badge>
         ) : '—'}
       </TableCell>
-      <TableCell data-testid={`text-model-${index}`}>{item.model || '—'}</TableCell>
-      <TableCell data-testid={`text-gb-${index}`}>{item.gb || '—'}</TableCell>
-      <TableCell data-testid={`text-color-${index}`}>{item.color || '—'}</TableCell>
-      <TableCell data-testid={`text-lockstatus-${index}`}>{item.lockStatus || '—'}</TableCell>
-      <TableCell data-testid={`text-date-${index}`}>{item.date || '—'}</TableCell>
-      <TableCell data-testid={`text-age-${index}`}>{item.age || '—'}</TableCell>
       <TableCell className="text-right">
         <Button
           variant="ghost"
@@ -146,15 +144,6 @@ const InventoryTable = memo(({ items, onViewDetails }: InventoryTableProps) => {
               </TableHead>
               <TableHead 
                 className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('grade')}
-              >
-                <div className="flex items-center">
-                  GRADE
-                  <SortIcon field="grade" />
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover-elevate"
                 onClick={() => handleSort('model')}
               >
                 <div className="flex items-center">
@@ -191,20 +180,11 @@ const InventoryTable = memo(({ items, onViewDetails }: InventoryTableProps) => {
               </TableHead>
               <TableHead 
                 className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('date')}
+                onClick={() => handleSort('grade')}
               >
                 <div className="flex items-center">
-                  DATE
-                  <SortIcon field="date" />
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover-elevate"
-                onClick={() => handleSort('age')}
-              >
-                <div className="flex items-center">
-                  AGE
-                  <SortIcon field="age" />
+                  GRADE
+                  <SortIcon field="grade" />
                 </div>
               </TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -213,7 +193,7 @@ const InventoryTable = memo(({ items, onViewDetails }: InventoryTableProps) => {
           <TableBody>
             {sortedItems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                   No devices found. Try adjusting your search.
                 </TableCell>
               </TableRow>

@@ -67,8 +67,6 @@ export default function ItemDetailSheet({ item, open, onOpenChange }: ItemDetail
         <div className="mt-6 space-y-1">
           <DetailRow label="IMEI" value={item.imei} />
           <Separator />
-          <DetailRow label="Grade" value={item.grade} />
-          <Separator />
           <DetailRow label="Model" value={item.model} />
           <Separator />
           <DetailRow label="Storage (GB)" value={item.gb} />
@@ -77,11 +75,13 @@ export default function ItemDetailSheet({ item, open, onOpenChange }: ItemDetail
           <Separator />
           <DetailRow label="Lock Status" value={item.lockStatus} />
           <Separator />
+          <DetailRow label="Grade" value={item.grade} />
+          <Separator />
           <DetailRow label="Date" value={item.date} />
           <Separator />
-          <DetailRow label="Concatenated Info" value={item.concat} />
-          <Separator />
           <DetailRow label="Age" value={item.age} />
+          <Separator />
+          <DetailRow label="Concatenated Info" value={item.concat} />
         </div>
       </SheetContent>
     </Sheet>
