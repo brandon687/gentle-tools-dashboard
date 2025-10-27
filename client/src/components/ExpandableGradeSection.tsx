@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import { InventoryItem } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 
 interface ExpandableGradeSectionProps {
@@ -27,11 +35,11 @@ interface GroupedData {
   };
 }
 
-export default function ExpandableGradeSection({ items }: ExpandableGradeSectionProps) {
+const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => {
   const [expandedGrades, setExpandedGrades] = useState<Set<string>>(new Set());
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [expandedGB, setExpandedGB] = useState<Set<string>>(new Set());
-  const [selectedIMEIs, setSelectedIMEIs] = useState<InventoryItem[] | null>(null);
+  const [selectedDevices, setSelectedDevices] = useState<InventoryItem[] | null>(null);
   const { toast } = useToast();
 
   const groupedData = useMemo((): GroupedData => {
@@ -64,46 +72,79 @@ export default function ExpandableGradeSection({ items }: ExpandableGradeSection
   }, [groupedData]);
 
   const toggleGrade = (grade: string) => {
-    const newExpanded = new Set(expandedGrades);
-    if (newExpanded.has(grade)) {
-      newExpanded.delete(grade);
-    } else {
-      newExpanded.add(grade);
-    }
-    setExpandedGrades(newExpanded);
+    setExpandedGrades(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(grade)) {
+        newSet.delete(grade);
+      } else {
+        newSet.add(grade);
+      }
+      return newSet;
+    });
   };
 
   const toggleModel = (key: string) => {
-    const newExpanded = new Set(expandedModels);
-    if (newExpanded.has(key)) {
-      newExpanded.delete(key);
-    } else {
-      newExpanded.add(key);
-    }
-    setExpandedModels(newExpanded);
+    setExpandedModels(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
   };
 
   const toggleGB = (key: string) => {
-    const newExpanded = new Set(expandedGB);
-    if (newExpanded.has(key)) {
-      newExpanded.delete(key);
-    } else {
-      newExpanded.add(key);
-    }
-    setExpandedGB(newExpanded);
+    setExpandedGB(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
   };
 
-  const showIMEIs = (imeis: InventoryItem[]) => {
-    setSelectedIMEIs(imeis);
+  const showDevices = (devices: InventoryItem[]) => {
+    setSelectedDevices(devices);
   };
 
-  const copyIMEIs = async (imeis: InventoryItem[]) => {
-    const imeiList = imeis.map(item => item.imei).filter(Boolean).join('\n');
+  const copyIMEIs = async (devices: InventoryItem[]) => {
+    const imeiList = devices.map(item => item.imei).filter(Boolean).join('\n');
     try {
       await navigator.clipboard.writeText(imeiList);
       toast({
         title: "Copied!",
-        description: `${imeis.length} IMEIs copied to clipboard.`,
+        description: `${devices.length} IMEIs copied to clipboard.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Copy Failed",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const copyFullData = async (devices: InventoryItem[]) => {
+    const headers = ['IMEI', 'Model', 'GB', 'Grade', 'Color', 'Lock Status'];
+    const rows = devices.map(d => [
+      d.imei || '',
+      d.model || '',
+      d.gb || '',
+      d.grade || '',
+      d.color || '',
+      d.lockStatus || ''
+    ].map(f => `"${f}"`).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    
+    try {
+      await navigator.clipboard.writeText(csv);
+      toast({
+        title: "Copied!",
+        description: `${devices.length} devices copied as CSV.`,
       });
     } catch (err) {
       toast({
@@ -198,20 +239,20 @@ export default function ExpandableGradeSection({ items }: ExpandableGradeSection
 
                                   {expandedGB.has(gbKey) && (
                                     <div className="space-y-1 pl-4 border-l border-border ml-2">
-                                      {Object.entries(colors).map(([color, imeiList]) => {
+                                      {Object.entries(colors).map(([color, deviceList]) => {
                                         const colorKey = `${gbKey}-${color}`;
                                         
                                         return (
                                           <div
                                             key={colorKey}
                                             className="flex items-center justify-between gap-2 py-1 px-2 rounded hover-elevate active-elevate-2 cursor-pointer"
-                                            onDoubleClick={() => showIMEIs(imeiList)}
+                                            onDoubleClick={() => showDevices(deviceList)}
                                             data-testid={`color-item-${colorKey}`}
                                           >
                                             <span className="text-sm">{color}</span>
                                             <div className="flex items-center gap-2">
                                               <Badge variant="secondary" className="text-xs">
-                                                {imeiList.length}
+                                                {deviceList.length}
                                               </Badge>
                                               <Button
                                                 variant="ghost"
@@ -219,7 +260,7 @@ export default function ExpandableGradeSection({ items }: ExpandableGradeSection
                                                 className="h-6 w-6"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  copyIMEIs(imeiList);
+                                                  copyIMEIs(deviceList);
                                                 }}
                                                 data-testid={`button-copy-${colorKey}`}
                                               >
@@ -246,37 +287,62 @@ export default function ExpandableGradeSection({ items }: ExpandableGradeSection
         ))}
       </div>
 
-      <Dialog open={selectedIMEIs !== null} onOpenChange={() => setSelectedIMEIs(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+      <Dialog open={selectedDevices !== null} onOpenChange={() => setSelectedDevices(null)}>
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>Individual IMEIs</DialogTitle>
+            <DialogTitle>Device Details</DialogTitle>
             <DialogDescription>
-              {selectedIMEIs?.length} device{selectedIMEIs?.length !== 1 ? 's' : ''} in this group
+              {selectedDevices?.length} device{selectedDevices?.length !== 1 ? 's' : ''} in this group
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-auto">
-            <div className="space-y-1 font-mono text-sm">
-              {selectedIMEIs?.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="p-2 rounded border bg-muted/50 hover-elevate"
-                  data-testid={`imei-item-${idx}`}
-                >
-                  {item.imei || 'N/A'}
-                </div>
-              ))}
-            </div>
+          <div className="flex-1 overflow-auto border rounded-md">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-10">
+                <TableRow>
+                  <TableHead>IMEI</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>GB</TableHead>
+                  <TableHead>Grade</TableHead>
+                  <TableHead>Color</TableHead>
+                  <TableHead>Lock Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedDevices?.map((device, idx) => (
+                  <TableRow
+                    key={idx}
+                    className="hover-elevate"
+                    data-testid={`device-row-${idx}`}
+                  >
+                    <TableCell className="font-mono text-sm">{device.imei || 'N/A'}</TableCell>
+                    <TableCell>{device.model || 'N/A'}</TableCell>
+                    <TableCell>{device.gb || 'N/A'}</TableCell>
+                    <TableCell>{device.grade || 'N/A'}</TableCell>
+                    <TableCell>{device.color || 'N/A'}</TableCell>
+                    <TableCell>{device.lockStatus || 'N/A'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
           <div className="flex items-center justify-end gap-2 pt-4 border-t">
             <Button
               variant="outline"
-              onClick={() => selectedIMEIs && copyIMEIs(selectedIMEIs)}
-              data-testid="button-copy-all-imeis"
+              onClick={() => selectedDevices && copyIMEIs(selectedDevices)}
+              data-testid="button-copy-imeis-only"
             >
               <Copy className="w-4 h-4 mr-2" />
-              Copy All
+              Copy IMEIs Only
             </Button>
-            <Button variant="ghost" onClick={() => setSelectedIMEIs(null)} data-testid="button-close-imeis">
+            <Button
+              variant="outline"
+              onClick={() => selectedDevices && copyFullData(selectedDevices)}
+              data-testid="button-copy-full-data"
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Copy Full Data (CSV)
+            </Button>
+            <Button variant="ghost" onClick={() => setSelectedDevices(null)} data-testid="button-close-devices">
               Close
             </Button>
           </div>
@@ -284,4 +350,8 @@ export default function ExpandableGradeSection({ items }: ExpandableGradeSection
       </Dialog>
     </>
   );
-}
+});
+
+ExpandableGradeSection.displayName = 'ExpandableGradeSection';
+
+export default ExpandableGradeSection;

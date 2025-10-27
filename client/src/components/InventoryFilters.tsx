@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import { InventoryItem } from "@shared/schema";
 import { Label } from "@/components/ui/label";
 import {
@@ -26,7 +26,7 @@ interface InventoryFiltersProps {
   onClearAll: () => void;
 }
 
-export default function InventoryFilters({
+const InventoryFilters = memo(({
   items,
   selectedGrade,
   selectedModel,
@@ -39,7 +39,7 @@ export default function InventoryFilters({
   onColorChange,
   onLockStatusChange,
   onClearAll,
-}: InventoryFiltersProps) {
+}: InventoryFiltersProps) => {
   // Filter items based on current selections to get available options
   const filteredByGrade = useMemo(() => {
     if (!selectedGrade || selectedGrade === 'all') return items;
@@ -252,4 +252,8 @@ export default function InventoryFilters({
       </div>
     </div>
   );
-}
+});
+
+InventoryFilters.displayName = 'InventoryFilters';
+
+export default InventoryFilters;

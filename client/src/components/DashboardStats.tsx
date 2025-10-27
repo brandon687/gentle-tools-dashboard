@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import { InventoryItem } from "@shared/schema";
 import StatsCard from "./StatsCard";
 import { Package, Star, Smartphone, Lock, Box, Layers } from "lucide-react";
@@ -7,7 +7,7 @@ interface DashboardStatsProps {
   items: InventoryItem[];
 }
 
-export default function DashboardStats({ items }: DashboardStatsProps) {
+const DashboardStats = memo(({ items }: DashboardStatsProps) => {
   const stats = useMemo(() => {
     const gradeMap = new Map<string, number>();
     const modelMap = new Map<string, number>();
@@ -103,4 +103,8 @@ export default function DashboardStats({ items }: DashboardStatsProps) {
       />
     </div>
   );
-}
+});
+
+DashboardStats.displayName = 'DashboardStats';
+
+export default DashboardStats;
