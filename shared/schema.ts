@@ -24,4 +24,5 @@ export interface InventoryStats {
 export interface InventoryDataResponse {
   physicalInventory: InventoryItem[];
   gradedToFallout: InventoryItem[];
+  fallout: InventoryItem[];
 }
