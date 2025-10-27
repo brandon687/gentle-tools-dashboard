@@ -56,14 +56,16 @@ export default function InventoryTable({ items, onViewDetails }: InventoryTableP
   });
 
   const getGradeBadgeVariant = (grade?: string) => {
-    switch (grade?.toUpperCase()) {
-      case 'A':
-      case 'A+':
+    const normalizedGrade = grade?.toUpperCase().trim();
+    switch (normalizedGrade) {
+      case 'A1 GRADE':
+      case 'A1':
         return 'default';
-      case 'B':
-      case 'B+':
+      case 'A GRADE':
+      case 'A':
         return 'secondary';
-      case 'C':
+      case 'AB GRADE':
+      case 'AB':
         return 'outline';
       default:
         return 'outline';
