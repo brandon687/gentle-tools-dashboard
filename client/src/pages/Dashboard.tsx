@@ -3,13 +3,17 @@ import { InventoryItem, InventoryStats } from "@shared/schema";
 import Header from "@/components/Header";
 import DashboardStats from "@/components/DashboardStats";
 import InventoryTable from "@/components/InventoryTable";
+import PivotView from "@/components/PivotView";
 import ItemDetailSheet from "@/components/ItemDetailSheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, Grid3x3 } from "lucide-react";
 
 export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'pivot'>('table');
 
   // TODO: Remove mock data - replace with real Google Sheets data
   const mockInventoryData: InventoryItem[] = [
@@ -109,6 +113,30 @@ export default function Dashboard() {
       concat: "Pixel 7 Pro 256GB Obsidian",
       age: "15 days",
     },
+    {
+      id: "9",
+      imei: "356938035643817",
+      grade: "A",
+      model: "iPhone 14 Pro",
+      gb: "512GB",
+      color: "Deep Purple",
+      lockStatus: "Unlocked",
+      date: "2024-02-01",
+      concat: "iPhone 14 Pro 512GB Deep Purple",
+      age: "29 days",
+    },
+    {
+      id: "10",
+      imei: "356938035643818",
+      grade: "B",
+      model: "Galaxy S21",
+      gb: "256GB",
+      color: "Phantom Gray",
+      lockStatus: "T-Mobile",
+      date: "2023-12-20",
+      concat: "Galaxy S21 256GB Phantom Gray",
+      age: "71 days",
+    },
   ];
 
   const filteredItems = useMemo(() => {
@@ -191,19 +219,39 @@ export default function Dashboard() {
         <DashboardStats stats={stats} />
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <h3 className="text-xl font-semibold">
               Inventory Items
               <span className="text-muted-foreground font-normal text-base ml-3">
                 ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
               </span>
             </h3>
+
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
+              <TabsList>
+                <TabsTrigger value="table" data-testid="tab-table-view">
+                  <Table className="w-4 h-4 mr-2" />
+                  Table View
+                </TabsTrigger>
+                <TabsTrigger value="pivot" data-testid="tab-pivot-view">
+                  <Grid3x3 className="w-4 h-4 mr-2" />
+                  Pivot View
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
-          <InventoryTable
-            items={filteredItems}
-            onViewDetails={handleViewDetails}
-          />
+          {viewMode === 'table' ? (
+            <InventoryTable
+              items={filteredItems}
+              onViewDetails={handleViewDetails}
+            />
+          ) : (
+            <PivotView
+              items={filteredItems}
+              onViewDetails={handleViewDetails}
+            />
+          )}
         </div>
       </main>
 
