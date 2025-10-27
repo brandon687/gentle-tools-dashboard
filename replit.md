@@ -27,6 +27,14 @@ Preferred communication style: Simple, everyday language.
 - Local React state (useState) for UI state
 - No global state management library (Redux, Zustand, etc.)
 
+**Performance Optimizations**:
+- Debounced search (150ms) to prevent excessive re-renders during typing
+- React.memo wrapping on table rows and heavy components
+- useMemo for expensive computations (sorting, filtering, grouping)
+- useCallback for stable event handler references
+- useTransition for non-blocking UI updates during filter changes
+- Optimized render cycles to minimize unnecessary component updates
+
 **Routing**: Wouter for lightweight client-side routing
 
 **Design System**:
