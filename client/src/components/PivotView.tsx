@@ -2,10 +2,12 @@ import { useState, useMemo } from "react";
 import { InventoryItem } from "@shared/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, Copy, Check, Download } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Check, Download, ArrowDownWideNarrow, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { downloadCSV } from "@/lib/exportUtils";
+import { sortModelsByHierarchy } from "@/lib/modelSorting";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface PivotViewProps {
   items: InventoryItem[];
@@ -36,6 +38,7 @@ export default function PivotView({ items }: PivotViewProps) {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [expandedGB, setExpandedGB] = useState<Set<string>>(new Set());
   const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<'quantity' | 'release'>('release');
   const { toast } = useToast();
 
   const modelData = useMemo(() => {
@@ -82,8 +85,14 @@ export default function PivotView({ items }: PivotViewProps) {
       models[model].gbGroups[gb].colorGroups[color].items.push(item);
     });
     
-    return Object.values(models).sort((a, b) => b.totalDevices - a.totalDevices);
-  }, [items]);
+    const modelList = Object.values(models);
+    
+    if (sortMode === 'quantity') {
+      return modelList.sort((a, b) => b.totalDevices - a.totalDevices);
+    } else {
+      return modelList.sort((a, b) => sortModelsByHierarchy(a.model, b.model));
+    }
+  }, [items, sortMode]);
 
   const toggleModel = (model: string) => {
     setExpandedModels(prev => {
@@ -142,6 +151,23 @@ export default function PivotView({ items }: PivotViewProps) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 pb-2 border-b">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Sort by:</span>
+          <Tabs value={sortMode} onValueChange={(value) => setSortMode(value as 'quantity' | 'release')}>
+            <TabsList>
+              <TabsTrigger value="release" className="gap-2" data-testid="sort-release">
+                <Calendar className="w-4 h-4" />
+                Release Order
+              </TabsTrigger>
+              <TabsTrigger value="quantity" className="gap-2" data-testid="sort-quantity">
+                <ArrowDownWideNarrow className="w-4 h-4" />
+                Quantity
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {modelData.map((modelGroup) => {
           const isModelExpanded = expandedModels.has(modelGroup.model);

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
+import { sortModelsByHierarchy, sortGBOptions, sortColors } from "@/lib/modelSorting";
 
 interface InventoryFiltersProps {
   items: InventoryItem[];
@@ -70,19 +71,19 @@ const InventoryFilters = memo(({
   // Available models (filtered by grade)
   const models = useMemo(() => {
     const set = new Set(filteredByGrade.map(item => item.model).filter(Boolean));
-    return Array.from(set).sort();
+    return Array.from(set).sort(sortModelsByHierarchy);
   }, [filteredByGrade]);
 
   // Available GB options (filtered by grade + model)
   const gbOptions = useMemo(() => {
     const set = new Set(filteredByModel.map(item => item.gb).filter(Boolean));
-    return Array.from(set).sort();
+    return Array.from(set).sort(sortGBOptions);
   }, [filteredByModel]);
 
   // Available colors (filtered by grade + model + gb)
   const colors = useMemo(() => {
     const set = new Set(filteredByGB.map(item => item.color).filter(Boolean));
-    return Array.from(set).sort();
+    return Array.from(set).sort(sortColors);
   }, [filteredByGB]);
 
   // Available lock statuses (filtered by grade + model + gb + color)

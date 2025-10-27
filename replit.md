@@ -47,10 +47,14 @@ Preferred communication style: Simple, everyday language.
 - Dashboard with stat cards showing aggregate metrics
 - Expandable/collapsible sections for hierarchical data (Grade → Model → GB → Color)
 - Table view with sorting capabilities
-- Pivot/grouping view for data analysis
+- Pivot/grouping view for data analysis with two sorting modes:
+  - **Release Order**: iPhone models sorted by Apple's official release chronology (newest first), then by tier (Pro Max > Pro > Plus > Base > mini)
+  - **Quantity**: Models sorted by device count (highest to lowest)
 - Detail sheets (side panels) for individual item inspection
+- Smart cascading filters with intelligent model/GB/color sorting
 - Search and filter functionality
 - Toast notifications for user feedback
+- CSV export capabilities at all hierarchy levels
 
 ### Backend Architecture
 
@@ -149,3 +153,23 @@ Preferred communication style: Simple, everyday language.
 5. Response sent to client as JSON
 6. React Query caches and manages the data
 7. Components consume data through query hooks
+
+### Sorting and Organization
+
+**iPhone Model Sorting** (`client/src/lib/modelSorting.ts`):
+- Comprehensive hierarchy system based on Apple's official release chronology
+- Supports all iPhone models from iPhone 6 through iPhone 16 series
+- Two-tier sorting: generation (release date) and tier (Pro Max > Pro > Plus > Base > mini)
+- Used across all views (Pivot, Filters, Expandable Sections) for consistent model ordering
+
+**Storage/GB Sorting**:
+- Numerical sorting from highest to lowest (e.g., 1TB > 512GB > 256GB > 128GB)
+- Applied consistently across all components
+
+**Color Sorting**:
+- Alphabetical sorting for easy scanning
+- Applied consistently across all components
+
+**Grade Sorting**:
+- Sorted by quantity (highest to lowest)
+- Three available grades: A1 GRADE, A GRADE, AB GRADE

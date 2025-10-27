@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { sortModelsByHierarchy, sortGBOptions, sortColors } from "@/lib/modelSorting";
 
 interface ExpandableGradeSectionProps {
   items: InventoryItem[];
@@ -188,7 +189,9 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
 
               {expandedGrades.has(grade) && (
                 <div className="space-y-2 pl-4 border-l-2 border-border ml-2">
-                  {Object.entries(groupedData[grade]).map(([model, gbs]) => {
+                  {Object.entries(groupedData[grade])
+                    .sort(([a], [b]) => sortModelsByHierarchy(a, b))
+                    .map(([model, gbs]) => {
                     const modelKey = `${grade}-${model}`;
                     const modelCount = Object.values(gbs).reduce((acc, colors) => 
                       acc + Object.values(colors).reduce((acc2, items) => acc2 + items.length, 0), 0);
@@ -215,7 +218,9 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
 
                         {expandedModels.has(modelKey) && (
                           <div className="space-y-1 pl-4 border-l border-border ml-2">
-                            {Object.entries(gbs).map(([gb, colors]) => {
+                            {Object.entries(gbs)
+                              .sort(([a], [b]) => sortGBOptions(a, b))
+                              .map(([gb, colors]) => {
                               const gbKey = `${modelKey}-${gb}`;
                               const gbCount = Object.values(colors).reduce((acc, items) => acc + items.length, 0);
                               
@@ -241,7 +246,9 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
 
                                   {expandedGB.has(gbKey) && (
                                     <div className="space-y-1 pl-4 border-l border-border ml-2">
-                                      {Object.entries(colors).map(([color, deviceList]) => {
+                                      {Object.entries(colors)
+                                        .sort(([a], [b]) => sortColors(a, b))
+                                        .map(([color, deviceList]) => {
                                         const colorKey = `${gbKey}-${color}`;
                                         
                                         return (
