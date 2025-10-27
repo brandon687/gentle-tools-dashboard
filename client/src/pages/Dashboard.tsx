@@ -5,8 +5,10 @@ import DashboardStats from "@/components/DashboardStats";
 import InventoryTable from "@/components/InventoryTable";
 import PivotView from "@/components/PivotView";
 import ItemDetailSheet from "@/components/ItemDetailSheet";
+import InvMatchDialog from "@/components/InvMatchDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, Grid3x3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Table, Grid3x3, Scan } from "lucide-react";
 
 export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -14,13 +16,14 @@ export default function Dashboard() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'pivot'>('table');
+  const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
 
   // TODO: Remove mock data - replace with real Google Sheets data
   const mockInventoryData: InventoryItem[] = [
     {
       id: "1",
       imei: "356938035643809",
-      grade: "A",
+      grade: "A GRADE",
       model: "iPhone 14 Pro",
       gb: "256GB",
       color: "Space Black",
@@ -32,7 +35,7 @@ export default function Dashboard() {
     {
       id: "2",
       imei: "356938035643810",
-      grade: "B+",
+      grade: "AB GRADE",
       model: "iPhone 13",
       gb: "128GB",
       color: "Blue",
@@ -44,7 +47,7 @@ export default function Dashboard() {
     {
       id: "3",
       imei: "356938035643811",
-      grade: "A+",
+      grade: "A1 GRADE",
       model: "Galaxy S23",
       gb: "512GB",
       color: "Phantom Black",
@@ -56,7 +59,7 @@ export default function Dashboard() {
     {
       id: "4",
       imei: "356938035643812",
-      grade: "A",
+      grade: "A GRADE",
       model: "iPhone 14",
       gb: "128GB",
       color: "Purple",
@@ -68,7 +71,7 @@ export default function Dashboard() {
     {
       id: "5",
       imei: "356938035643813",
-      grade: "B",
+      grade: "AB GRADE",
       model: "iPhone 12 Pro Max",
       gb: "256GB",
       color: "Gold",
@@ -80,7 +83,7 @@ export default function Dashboard() {
     {
       id: "6",
       imei: "356938035643814",
-      grade: "A+",
+      grade: "A1 GRADE",
       model: "Galaxy S22 Ultra",
       gb: "1TB",
       color: "Burgundy",
@@ -92,7 +95,7 @@ export default function Dashboard() {
     {
       id: "7",
       imei: "356938035643815",
-      grade: "A",
+      grade: "A GRADE",
       model: "iPhone 13 Pro",
       gb: "512GB",
       color: "Sierra Blue",
@@ -104,7 +107,7 @@ export default function Dashboard() {
     {
       id: "8",
       imei: "356938035643816",
-      grade: "B+",
+      grade: "AB GRADE",
       model: "Pixel 7 Pro",
       gb: "256GB",
       color: "Obsidian",
@@ -116,7 +119,7 @@ export default function Dashboard() {
     {
       id: "9",
       imei: "356938035643817",
-      grade: "A",
+      grade: "A GRADE",
       model: "iPhone 14 Pro",
       gb: "512GB",
       color: "Deep Purple",
@@ -128,7 +131,7 @@ export default function Dashboard() {
     {
       id: "10",
       imei: "356938035643818",
-      grade: "B",
+      grade: "AB GRADE",
       model: "Galaxy S21",
       gb: "256GB",
       color: "Phantom Gray",
@@ -227,18 +230,29 @@ export default function Dashboard() {
               </span>
             </h3>
 
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
-              <TabsList>
-                <TabsTrigger value="table" data-testid="tab-table-view">
-                  <Table className="w-4 h-4 mr-2" />
-                  Table View
-                </TabsTrigger>
-                <TabsTrigger value="pivot" data-testid="tab-pivot-view">
-                  <Grid3x3 className="w-4 h-4 mr-2" />
-                  Pivot View
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsInvMatchOpen(true)}
+                data-testid="button-inv-match"
+              >
+                <Scan className="w-4 h-4 mr-2" />
+                INV MATCH
+              </Button>
+
+              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
+                <TabsList>
+                  <TabsTrigger value="table" data-testid="tab-table-view">
+                    <Table className="w-4 h-4 mr-2" />
+                    Table View
+                  </TabsTrigger>
+                  <TabsTrigger value="pivot" data-testid="tab-pivot-view">
+                    <Grid3x3 className="w-4 h-4 mr-2" />
+                    Pivot View
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
 
           {viewMode === 'table' ? (
@@ -259,6 +273,12 @@ export default function Dashboard() {
         item={selectedItem}
         open={isSheetOpen}
         onOpenChange={setIsSheetOpen}
+      />
+
+      <InvMatchDialog
+        open={isInvMatchOpen}
+        onOpenChange={setIsInvMatchOpen}
+        items={mockInventoryData}
       />
     </div>
   );

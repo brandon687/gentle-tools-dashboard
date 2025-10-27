@@ -160,7 +160,7 @@ export default function PivotView({ items, onViewDetails }: PivotViewProps) {
                       </div>
                     </div>
 
-                    {groupItems.length > 1 && (
+                    {groupItems.length >= 1 && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -179,7 +179,7 @@ export default function PivotView({ items, onViewDetails }: PivotViewProps) {
                         ) : (
                           <>
                             <Copy className="w-4 h-4 mr-2" />
-                            Copy {groupItems.length} IMEIs
+                            Copy {groupItems.length} {groupItems.length === 1 ? 'IMEI' : 'IMEIs'}
                           </>
                         )}
                       </Button>
@@ -198,7 +198,7 @@ export default function PivotView({ items, onViewDetails }: PivotViewProps) {
               {selectedGroup} - {displayedItems.length} {displayedItems.length === 1 ? 'Device' : 'Devices'}
             </h3>
             <div className="flex items-center gap-2">
-              {displayedItems.length > 1 && (
+              {displayedItems.length >= 1 && (
                 <Button
                   variant="default"
                   size="sm"
@@ -208,7 +208,7 @@ export default function PivotView({ items, onViewDetails }: PivotViewProps) {
                   {copiedGroup === selectedGroup ? (
                     <>
                       <Check className="w-4 h-4 mr-2" />
-                      Copied {displayedItems.length} IMEIs
+                      Copied {displayedItems.length} {displayedItems.length === 1 ? 'IMEI' : 'IMEIs'}
                     </>
                   ) : (
                     <>
