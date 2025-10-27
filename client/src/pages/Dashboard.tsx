@@ -9,6 +9,7 @@ import PivotView from "@/components/PivotView";
 import ItemDetailSheet from "@/components/ItemDetailSheet";
 import InvMatchDialog from "@/components/InvMatchDialog";
 import InventoryFilters from "@/components/InventoryFilters";
+import SmartFilterSearch from "@/components/SmartFilterSearch";
 import ExportButtons from "@/components/ExportButtons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,20 @@ export default function Dashboard() {
     setFilterGB("");
     setFilterColor("");
     setFilterLockStatus("");
+  };
+
+  const handleSmartFilterChange = (filters: {
+    grade?: string;
+    model?: string;
+    gb?: string;
+    color?: string;
+    lockStatus?: string;
+  }) => {
+    setFilterGrade(filters.grade || "");
+    setFilterModel(filters.model || "");
+    setFilterGB(filters.gb || "");
+    setFilterColor(filters.color || "");
+    setFilterLockStatus(filters.lockStatus || "");
   };
 
   const allItems = useMemo(() => {
@@ -229,6 +244,11 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              <SmartFilterSearch
+                items={currentItems}
+                onFiltersChange={handleSmartFilterChange}
+              />
+
               <InventoryFilters
                 items={currentItems}
                 selectedGrade={filterGrade}
@@ -302,6 +322,11 @@ export default function Dashboard() {
                   </Tabs>
                 </div>
               </div>
+
+              <SmartFilterSearch
+                items={currentItems}
+                onFiltersChange={handleSmartFilterChange}
+              />
 
               <InventoryFilters
                 items={currentItems}
