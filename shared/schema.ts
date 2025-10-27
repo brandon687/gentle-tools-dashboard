@@ -1,39 +1,27 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+export const inventoryItemSchema = z.object({
+  imei: z.string().optional(),
+  grade: z.string().optional(),
+  model: z.string().optional(),
+  gb: z.string().optional(),
+  color: z.string().optional(),
+  lockStatus: z.string().optional(),
+  date: z.string().optional(),
+  concat: z.string().optional(),
+  age: z.string().optional(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
-
-export interface InventoryItem {
-  id: string;
-  imei?: string;
-  grade?: string;
-  model?: string;
-  gb?: string;
-  color?: string;
-  lockStatus?: string;
-  date?: string;
-  concat?: string;
-  age?: string;
-  [key: string]: any;
-}
+export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 
 export interface InventoryStats {
   totalDevices: number;
-  byGrade: { grade: string; count: number }[];
-  byModel: { model: string; count: number }[];
-  byLockStatus: { status: string; count: number }[];
+  byGrade: Array<{ grade: string; count: number }>;
+  byModel: Array<{ model: string; count: number }>;
+  byLockStatus: Array<{ status: string; count: number }>;
+}
+
+export interface InventoryDataResponse {
+  physicalInventory: InventoryItem[];
+  gradedToFallout: InventoryItem[];
 }
