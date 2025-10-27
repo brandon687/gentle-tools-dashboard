@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { InventoryItem, InventoryStats, InventoryDataResponse } from "@shared/schema";
+import { InventoryItem, InventoryDataResponse } from "@shared/schema";
 import Header from "@/components/Header";
+import DashboardStats from "@/components/DashboardStats";
 import ExpandableGradeSection from "@/components/ExpandableGradeSection";
 import InventoryTable from "@/components/InventoryTable";
 import PivotView from "@/components/PivotView";
@@ -141,10 +142,17 @@ export default function Dashboard() {
 
           <TabsContent value="physical" className="space-y-6">
             <div>
-              <h3 className="text-xl font-semibold mb-4">
+              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+                Quick Insights
+              </h3>
+              <DashboardStats items={inventoryData?.physicalInventory || []} />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
                 Breakdown by Grade
-                <span className="text-muted-foreground font-normal text-base ml-3">
-                  ({inventoryData?.physicalInventory.length || 0} total devices)
+                <span className="font-normal text-base ml-3 normal-case">
+                  ({inventoryData?.physicalInventory.length || 0} total devices • Click to expand)
                 </span>
               </h3>
               <ExpandableGradeSection items={inventoryData?.physicalInventory || []} />
@@ -152,9 +160,9 @@ export default function Dashboard() {
 
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
-                <h3 className="text-xl font-semibold">
+                <h3 className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
                   Detailed View
-                  <span className="text-muted-foreground font-normal text-base ml-3">
+                  <span className="font-normal text-base ml-3 normal-case">
                     ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
                   </span>
                 </h3>
@@ -200,10 +208,17 @@ export default function Dashboard() {
 
           <TabsContent value="fallout" className="space-y-6">
             <div>
-              <h3 className="text-xl font-semibold mb-4">
+              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+                Quick Insights
+              </h3>
+              <DashboardStats items={inventoryData?.gradedToFallout || []} />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
                 Breakdown by Grade
-                <span className="text-muted-foreground font-normal text-base ml-3">
-                  ({inventoryData?.gradedToFallout.length || 0} total devices)
+                <span className="font-normal text-base ml-3 normal-case">
+                  ({inventoryData?.gradedToFallout.length || 0} total devices • Click to expand)
                 </span>
               </h3>
               <ExpandableGradeSection items={inventoryData?.gradedToFallout || []} />
@@ -211,9 +226,9 @@ export default function Dashboard() {
 
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
-                <h3 className="text-xl font-semibold">
+                <h3 className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
                   Detailed View
-                  <span className="text-muted-foreground font-normal text-base ml-3">
+                  <span className="font-normal text-base ml-3 normal-case">
                     ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
                   </span>
                 </h3>
