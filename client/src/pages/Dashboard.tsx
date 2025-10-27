@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'pivot'>('table');
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
-  const [activeDataset, setActiveDataset] = useState<'physical' | 'graded' | 'fallout'>('physical');
+  const [activeDataset, setActiveDataset] = useState<'physical' | 'graded'>('physical');
   const [isPending, startTransition] = useTransition();
 
   const [filterGrade, setFilterGrade] = useState("");
@@ -42,9 +42,9 @@ export default function Dashboard() {
 
   const currentItems = useMemo(() => {
     if (!inventoryData) return [];
-    if (activeDataset === 'physical') return inventoryData.physicalInventory;
-    if (activeDataset === 'graded') return inventoryData.gradedToFallout;
-    return inventoryData.fallout;
+    return activeDataset === 'physical' 
+      ? inventoryData.physicalInventory 
+      : inventoryData.gradedToFallout;
   }, [inventoryData, activeDataset]);
 
   const filteredItems = useMemo(() => {
@@ -107,7 +107,7 @@ export default function Dashboard() {
 
   const allItems = useMemo(() => {
     if (!inventoryData) return [];
-    return [...inventoryData.physicalInventory, ...inventoryData.gradedToFallout, ...inventoryData.fallout];
+    return [...inventoryData.physicalInventory, ...inventoryData.gradedToFallout];
   }, [inventoryData]);
 
   if (error) {
@@ -176,7 +176,7 @@ export default function Dashboard() {
         </div>
 
         <Tabs value={activeDataset} onValueChange={(v) => setActiveDataset(v as any)} className="space-y-6">
-          <TabsList className="grid w-full max-w-3xl grid-cols-3">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="physical" data-testid="tab-physical-inventory">
               <Database className="w-4 h-4 mr-2" />
               Physical Inventory
@@ -184,10 +184,6 @@ export default function Dashboard() {
             <TabsTrigger value="graded" data-testid="tab-graded-fallout">
               <AlertTriangle className="w-4 h-4 mr-2" />
               Graded to Fallout
-            </TabsTrigger>
-            <TabsTrigger value="fallout" data-testid="tab-fallout">
-              <AlertCircle className="w-4 h-4 mr-2" />
-              Fallout
             </TabsTrigger>
           </TabsList>
 
@@ -292,82 +288,6 @@ export default function Dashboard() {
                 </span>
               </h3>
               <ExpandableGradeSection items={inventoryData?.gradedToFallout || []} />
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <h3 className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
-                  Detailed View
-                  <span className="font-normal text-base ml-3 normal-case">
-                    ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
-                  </span>
-                </h3>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <ExportButtons items={filteredItems} />
-
-                  <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
-                    <TabsList>
-                      <TabsTrigger value="table" data-testid="tab-table-view">
-                        <Table className="w-4 h-4 mr-2" />
-                        Table View
-                      </TabsTrigger>
-                      <TabsTrigger value="pivot" data-testid="tab-pivot-view">
-                        <Grid3x3 className="w-4 h-4 mr-2" />
-                        Pivot View
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-              </div>
-
-              <InventoryFilters
-                items={currentItems}
-                selectedGrade={filterGrade}
-                selectedModel={filterModel}
-                selectedGB={filterGB}
-                selectedColor={filterColor}
-                selectedLockStatus={filterLockStatus}
-                onGradeChange={setFilterGrade}
-                onModelChange={setFilterModel}
-                onGBChange={setFilterGB}
-                onColorChange={setFilterColor}
-                onLockStatusChange={setFilterLockStatus}
-                onClearAll={handleClearFilters}
-              />
-
-              {filteredItems.length === 0 ? (
-                <EmptyFilterState hasActiveFilters={hasActiveFilters} />
-              ) : viewMode === 'table' ? (
-                <InventoryTable
-                  items={filteredItems}
-                  onViewDetails={handleViewDetails}
-                />
-              ) : (
-                <PivotView
-                  items={filteredItems}
-                  onViewDetails={handleViewDetails}
-                />
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="fallout" className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-                Quick Insights
-              </h3>
-              <DashboardStats items={inventoryData?.fallout || []} />
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-                Breakdown by Grade
-                <span className="font-normal text-base ml-3 normal-case">
-                  ({inventoryData?.fallout.length || 0} total devices • Click to expand)
-                </span>
-              </h3>
-              <ExpandableGradeSection items={inventoryData?.fallout || []} />
             </div>
 
             <div className="space-y-4">
