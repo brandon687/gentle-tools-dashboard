@@ -2,7 +2,7 @@ import { useState, useMemo, memo } from "react";
 import { InventoryItem } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, Copy } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -128,7 +128,7 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
     }
   };
 
-  const copyFullData = async (devices: InventoryItem[]) => {
+  const downloadFullData = (devices: InventoryItem[]) => {
     const headers = ['IMEI', 'Model', 'GB', 'Grade', 'Color', 'Lock Status'];
     const rows = devices.map(d => [
       d.imei || '',
@@ -140,19 +140,21 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
     ].map(f => `"${f}"`).join(','));
     const csv = [headers.join(','), ...rows].join('\n');
     
-    try {
-      await navigator.clipboard.writeText(csv);
-      toast({
-        title: "Copied!",
-        description: `${devices.length} devices copied as CSV.`,
-      });
-    } catch (err) {
-      toast({
-        title: "Copy Failed",
-        description: "Please try again.",
-        variant: "destructive",
-      });
-    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `devices_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "CSV Downloaded",
+      description: `${devices.length} devices exported successfully.`,
+    });
   };
 
   return (
@@ -336,10 +338,10 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
             </Button>
             <Button
               variant="outline"
-              onClick={() => selectedDevices && copyFullData(selectedDevices)}
-              data-testid="button-copy-full-data"
+              onClick={() => selectedDevices && downloadFullData(selectedDevices)}
+              data-testid="button-download-full-data"
             >
-              <Copy className="w-4 h-4 mr-2" />
+              <Download className="w-4 h-4 mr-2" />
               Download as CSV
             </Button>
             <Button variant="ghost" onClick={() => setSelectedDevices(null)} data-testid="button-close-devices">
