@@ -11,6 +11,7 @@ import InvMatchDialog from "@/components/InvMatchDialog";
 import InventoryFilters from "@/components/InventoryFilters";
 import SmartFilterSearch from "@/components/SmartFilterSearch";
 import ExportButtons from "@/components/ExportButtons";
+import EmptyFilterState from "@/components/EmptyFilterState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Table, Grid3x3, Scan, AlertCircle, Database, AlertTriangle } from "lucide-react";
@@ -107,6 +108,10 @@ export default function Dashboard() {
     setFilterColor(filters.color || "");
     setFilterLockStatus(filters.lockStatus || "");
   };
+
+  const hasActiveFilters = useMemo(() => {
+    return !!(filterGrade || filterModel || filterGB || filterColor || filterLockStatus || searchQuery.trim());
+  }, [filterGrade, filterModel, filterGB, filterColor, filterLockStatus, searchQuery]);
 
   const allItems = useMemo(() => {
     if (!inventoryData) return [];
@@ -264,7 +269,9 @@ export default function Dashboard() {
                 onClearAll={handleClearFilters}
               />
 
-              {viewMode === 'table' ? (
+              {filteredItems.length === 0 ? (
+                <EmptyFilterState hasActiveFilters={hasActiveFilters} />
+              ) : viewMode === 'table' ? (
                 <InventoryTable
                   items={filteredItems}
                   onViewDetails={handleViewDetails}
@@ -343,7 +350,9 @@ export default function Dashboard() {
                 onClearAll={handleClearFilters}
               />
 
-              {viewMode === 'table' ? (
+              {filteredItems.length === 0 ? (
+                <EmptyFilterState hasActiveFilters={hasActiveFilters} />
+              ) : viewMode === 'table' ? (
                 <InventoryTable
                   items={filteredItems}
                   onViewDetails={handleViewDetails}
