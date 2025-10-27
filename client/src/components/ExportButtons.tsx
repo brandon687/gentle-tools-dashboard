@@ -15,20 +15,17 @@ export default function ExportButtons({ items }: ExportButtonsProps) {
   const convertToCSV = (data: InventoryItem[]): string => {
     if (data.length === 0) return '';
 
-    const headers = ['IMEI', 'Grade', 'Model', 'GB', 'Color', 'Lock Status', 'Date', 'Concat', 'Age'];
+    const headers = ['IMEI', 'MODEL', 'GB', 'COLOR', 'LOCK STATUS', 'GRADE'];
     const csvRows = [headers.join(',')];
 
     data.forEach(item => {
       const row = [
         item.imei || '',
-        item.grade || '',
         item.model || '',
         item.gb || '',
         item.color || '',
         item.lockStatus || '',
-        item.date || '',
-        item.concat || '',
-        item.age || '',
+        item.grade || '',
       ].map(field => `"${field}"`);
       csvRows.push(row.join(','));
     });

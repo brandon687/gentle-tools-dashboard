@@ -129,14 +129,14 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
   };
 
   const downloadFullData = (devices: InventoryItem[]) => {
-    const headers = ['IMEI', 'Model', 'GB', 'Grade', 'Color', 'Lock Status'];
+    const headers = ['IMEI', 'MODEL', 'GB', 'COLOR', 'LOCK STATUS', 'GRADE'];
     const rows = devices.map(d => [
       d.imei || '',
       d.model || '',
       d.gb || '',
-      d.grade || '',
       d.color || '',
-      d.lockStatus || ''
+      d.lockStatus || '',
+      d.grade || ''
     ].map(f => `"${f}"`).join(','));
     const csv = [headers.join(','), ...rows].join('\n');
     
