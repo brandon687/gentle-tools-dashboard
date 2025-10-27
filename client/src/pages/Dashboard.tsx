@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useTransition } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { InventoryItem, InventoryDataResponse } from "@shared/schema";
 import Header from "@/components/Header";
@@ -15,14 +15,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Table, Grid3x3, Scan, AlertCircle, Database, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 150);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'pivot'>('table');
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
   const [activeDataset, setActiveDataset] = useState<'physical' | 'fallout'>('physical');
+  const [isPending, startTransition] = useTransition();
 
   const [filterGrade, setFilterGrade] = useState("");
   const [filterModel, setFilterModel] = useState("");
@@ -45,8 +48,8 @@ export default function Dashboard() {
   const filteredItems = useMemo(() => {
     let items = currentItems;
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase();
       items = items.filter(item => 
         item.imei?.toLowerCase().includes(query) ||
         item.model?.toLowerCase().includes(query) ||
@@ -75,28 +78,30 @@ export default function Dashboard() {
     }
 
     return items;
-  }, [currentItems, searchQuery, filterGrade, filterModel, filterGB, filterColor, filterLockStatus]);
+  }, [currentItems, debouncedSearchQuery, filterGrade, filterModel, filterGB, filterColor, filterLockStatus]);
 
-  const handleViewDetails = (item: InventoryItem) => {
+  const handleViewDetails = useCallback((item: InventoryItem) => {
     setSelectedItem(item);
     setIsSheetOpen(true);
-  };
+  }, []);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     refetch();
-  };
+  }, [refetch]);
 
-  const handleClearFilters = () => {
-    setFilterGrade("");
-    setFilterModel("");
-    setFilterGB("");
-    setFilterColor("");
-    setFilterLockStatus("");
-  };
+  const handleClearFilters = useCallback(() => {
+    startTransition(() => {
+      setFilterGrade("");
+      setFilterModel("");
+      setFilterGB("");
+      setFilterColor("");
+      setFilterLockStatus("");
+    });
+  }, []);
 
   const hasActiveFilters = useMemo(() => {
-    return !!(filterGrade || filterModel || filterGB || filterColor || filterLockStatus || searchQuery.trim());
-  }, [filterGrade, filterModel, filterGB, filterColor, filterLockStatus, searchQuery]);
+    return !!(filterGrade || filterModel || filterGB || filterColor || filterLockStatus || debouncedSearchQuery.trim());
+  }, [filterGrade, filterModel, filterGB, filterColor, filterLockStatus, debouncedSearchQuery]);
 
   const allItems = useMemo(() => {
     if (!inventoryData) return [];

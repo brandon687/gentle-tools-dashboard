@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, memo, useCallback } from "react";
 import { InventoryItem } from "@shared/schema";
 import {
   Table,
@@ -20,66 +20,114 @@ interface InventoryTableProps {
 type SortField = keyof InventoryItem | null;
 type SortDirection = 'asc' | 'desc';
 
-export default function InventoryTable({ items, onViewDetails }: InventoryTableProps) {
+const getGradeBadgeVariant = (grade?: string) => {
+  const normalizedGrade = grade?.toUpperCase().trim();
+  switch (normalizedGrade) {
+    case 'A1 GRADE':
+    case 'A1':
+      return 'default';
+    case 'A GRADE':
+    case 'A':
+      return 'secondary';
+    case 'AB GRADE':
+    case 'AB':
+      return 'outline';
+    default:
+      return 'outline';
+  }
+};
+
+const MemoizedRow = memo(({ item, index, onViewDetails }: {
+  item: InventoryItem;
+  index: number;
+  onViewDetails: (item: InventoryItem) => void;
+}) => {
+  return (
+    <TableRow 
+      className="hover-elevate"
+      data-testid={`row-item-${index}`}
+    >
+      <TableCell className="font-mono text-sm" data-testid={`text-imei-${index}`}>
+        {item.imei || '—'}
+      </TableCell>
+      <TableCell>
+        {item.grade ? (
+          <Badge variant={getGradeBadgeVariant(item.grade)} data-testid={`badge-grade-${index}`}>
+            {item.grade}
+          </Badge>
+        ) : '—'}
+      </TableCell>
+      <TableCell data-testid={`text-model-${index}`}>{item.model || '—'}</TableCell>
+      <TableCell data-testid={`text-gb-${index}`}>{item.gb || '—'}</TableCell>
+      <TableCell data-testid={`text-color-${index}`}>{item.color || '—'}</TableCell>
+      <TableCell data-testid={`text-lockstatus-${index}`}>{item.lockStatus || '—'}</TableCell>
+      <TableCell data-testid={`text-date-${index}`}>{item.date || '—'}</TableCell>
+      <TableCell data-testid={`text-age-${index}`}>{item.age || '—'}</TableCell>
+      <TableCell className="text-right">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onViewDetails(item)}
+          data-testid={`button-view-${index}`}
+        >
+          <Eye className="w-4 h-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+});
+
+MemoizedRow.displayName = 'MemoizedRow';
+
+const InventoryTable = memo(({ items, onViewDetails }: InventoryTableProps) => {
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-  const handleSort = (field: keyof InventoryItem) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
+  const handleSort = useCallback((field: keyof InventoryItem) => {
+    setSortField(prev => {
+      if (prev === field) {
+        setSortDirection(dir => dir === 'asc' ? 'desc' : 'asc');
+        return field;
+      } else {
+        setSortDirection('asc');
+        return field;
+      }
+    });
+  }, []);
 
-  const sortedItems = [...items].sort((a, b) => {
-    if (!sortField) return 0;
+  const sortedItems = useMemo(() => {
+    if (!sortField) return items;
     
-    const aVal = a[sortField];
-    const bVal = b[sortField];
-    
-    if (aVal === undefined || aVal === null) return 1;
-    if (bVal === undefined || bVal === null) return -1;
-    
-    if (typeof aVal === 'string' && typeof bVal === 'string') {
-      return sortDirection === 'asc' 
-        ? aVal.localeCompare(bVal)
-        : bVal.localeCompare(aVal);
-    }
-    
-    if (typeof aVal === 'number' && typeof bVal === 'number') {
-      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-    }
-    
-    return 0;
-  });
+    return [...items].sort((a, b) => {
+      const aVal = a[sortField];
+      const bVal = b[sortField];
+      
+      if (aVal === undefined || aVal === null) return 1;
+      if (bVal === undefined || bVal === null) return -1;
+      
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDirection === 'asc' 
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      }
+      
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      
+      return 0;
+    });
+  }, [items, sortField, sortDirection]);
 
-  const getGradeBadgeVariant = (grade?: string) => {
-    const normalizedGrade = grade?.toUpperCase().trim();
-    switch (normalizedGrade) {
-      case 'A1 GRADE':
-      case 'A1':
-        return 'default';
-      case 'A GRADE':
-      case 'A':
-        return 'secondary';
-      case 'AB GRADE':
-      case 'AB':
-        return 'outline';
-      default:
-        return 'outline';
-    }
-  };
-
-  const SortIcon = ({ field }: { field: keyof InventoryItem }) => {
+  const SortIcon = useCallback(({ field }: { field: keyof InventoryItem }) => {
     if (sortField !== field) return null;
     return sortDirection === 'asc' ? (
       <ChevronUp className="w-4 h-4 inline-block ml-1" />
     ) : (
       <ChevronDown className="w-4 h-4 inline-block ml-1" />
     );
-  };
+  }, [sortField, sortDirection]);
 
   return (
     <div className="border rounded-md overflow-hidden">
@@ -171,39 +219,12 @@ export default function InventoryTable({ items, onViewDetails }: InventoryTableP
               </TableRow>
             ) : (
               sortedItems.map((item, index) => (
-                <TableRow 
-                  key={item.id || index} 
-                  className="hover-elevate"
-                  data-testid={`row-item-${index}`}
-                >
-                  <TableCell className="font-mono text-sm" data-testid={`text-imei-${index}`}>
-                    {item.imei || '—'}
-                  </TableCell>
-                  <TableCell>
-                    {item.grade ? (
-                      <Badge variant={getGradeBadgeVariant(item.grade)} data-testid={`badge-grade-${index}`}>
-                        {item.grade}
-                      </Badge>
-                    ) : '—'}
-                  </TableCell>
-                  <TableCell data-testid={`text-model-${index}`}>{item.model || '—'}</TableCell>
-                  <TableCell data-testid={`text-gb-${index}`}>{item.gb || '—'}</TableCell>
-                  <TableCell data-testid={`text-color-${index}`}>{item.color || '—'}</TableCell>
-                  <TableCell data-testid={`text-lockstatus-${index}`}>{item.lockStatus || '—'}</TableCell>
-                  <TableCell data-testid={`text-date-${index}`}>{item.date || '—'}</TableCell>
-                  <TableCell data-testid={`text-age-${index}`}>{item.age || '—'}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onViewDetails(item)}
-                      data-testid={`button-view-${index}`}
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      View
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                <MemoizedRow
+                  key={item.imei || `row-${index}`}
+                  item={item}
+                  index={index}
+                  onViewDetails={onViewDetails}
+                />
               ))
             )}
           </TableBody>
@@ -211,4 +232,8 @@ export default function InventoryTable({ items, onViewDetails }: InventoryTableP
       </div>
     </div>
   );
-}
+});
+
+InventoryTable.displayName = 'InventoryTable';
+
+export default InventoryTable;
