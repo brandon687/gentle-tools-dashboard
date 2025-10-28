@@ -161,14 +161,47 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {gradeStats.map(({ grade, count }) => (
+        {gradeStats.map(({ grade, count }) => {
+          // Collect all devices for this grade
+          const gradeDevices: InventoryItem[] = [];
+          Object.values(groupedData[grade]).forEach(gbs => {
+            Object.values(gbs).forEach(colors => {
+              Object.values(colors).forEach(deviceList => {
+                gradeDevices.push(...deviceList);
+              });
+            });
+          });
+          
+          return (
           <Card key={grade} className="overflow-hidden">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-lg font-semibold">{grade}</CardTitle>
-                <Badge variant="secondary" className="text-base px-3 py-1">
-                  {count}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-base px-3 py-1">
+                    {count}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => copyIMEIs(gradeDevices)}
+                    title="Copy all IMEIs for this grade"
+                    data-testid={`button-copy-grade-${grade}`}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => downloadFullData(gradeDevices)}
+                    title="Download all data for this grade as CSV"
+                    data-testid={`button-download-grade-${grade}`}
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -196,25 +229,57 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
                     const modelCount = Object.values(gbs).reduce((acc, colors) => 
                       acc + Object.values(colors).reduce((acc2, items) => acc2 + items.length, 0), 0);
                     
+                    // Collect all devices for this model
+                    const modelDevices: InventoryItem[] = [];
+                    Object.values(gbs).forEach(colors => {
+                      Object.values(colors).forEach(deviceList => {
+                        modelDevices.push(...deviceList);
+                      });
+                    });
+                    
                     return (
                       <div key={modelKey} className="space-y-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleModel(modelKey)}
-                          className="w-full justify-start text-sm hover-elevate active-elevate-2"
-                          data-testid={`button-toggle-model-${modelKey}`}
-                        >
-                          {expandedModels.has(modelKey) ? (
-                            <ChevronDown className="w-3 h-3 mr-2" />
-                          ) : (
-                            <ChevronRight className="w-3 h-3 mr-2" />
-                          )}
-                          <span className="font-medium">{model}</span>
-                          <Badge variant="outline" className="ml-auto">
-                            {modelCount}
-                          </Badge>
-                        </Button>
+                        <div className="flex items-center justify-between gap-2 group">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleModel(modelKey)}
+                            className="flex-1 justify-start text-sm hover-elevate active-elevate-2"
+                            data-testid={`button-toggle-model-${modelKey}`}
+                          >
+                            {expandedModels.has(modelKey) ? (
+                              <ChevronDown className="w-3 h-3 mr-2" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3 mr-2" />
+                            )}
+                            <span className="font-medium">{model}</span>
+                            <Badge variant="outline" className="ml-auto mr-2">
+                              {modelCount}
+                            </Badge>
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => copyIMEIs(modelDevices)}
+                              title="Copy IMEIs"
+                              data-testid={`button-copy-model-${modelKey}`}
+                            >
+                              <Copy className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => downloadFullData(modelDevices)}
+                              title="Download CSV"
+                              data-testid={`button-download-model-${modelKey}`}
+                            >
+                              <Download className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
 
                         {expandedModels.has(modelKey) && (
                           <div className="space-y-1 pl-4 border-l border-border ml-2">
@@ -224,25 +289,55 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
                               const gbKey = `${modelKey}-${gb}`;
                               const gbCount = Object.values(colors).reduce((acc, items) => acc + items.length, 0);
                               
+                              // Collect all devices for this GB
+                              const gbDevices: InventoryItem[] = [];
+                              Object.values(colors).forEach(deviceList => {
+                                gbDevices.push(...deviceList);
+                              });
+                              
                               return (
                                 <div key={gbKey} className="space-y-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => toggleGB(gbKey)}
-                                    className="w-full justify-start text-sm hover-elevate active-elevate-2"
-                                    data-testid={`button-toggle-gb-${gbKey}`}
-                                  >
-                                    {expandedGB.has(gbKey) ? (
-                                      <ChevronDown className="w-3 h-3 mr-2" />
-                                    ) : (
-                                      <ChevronRight className="w-3 h-3 mr-2" />
-                                    )}
-                                    <span>{gb}</span>
-                                    <Badge variant="outline" className="ml-auto">
-                                      {gbCount}
-                                    </Badge>
-                                  </Button>
+                                  <div className="flex items-center justify-between gap-2 group">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => toggleGB(gbKey)}
+                                      className="flex-1 justify-start text-sm hover-elevate active-elevate-2"
+                                      data-testid={`button-toggle-gb-${gbKey}`}
+                                    >
+                                      {expandedGB.has(gbKey) ? (
+                                        <ChevronDown className="w-3 h-3 mr-2" />
+                                      ) : (
+                                        <ChevronRight className="w-3 h-3 mr-2" />
+                                      )}
+                                      <span>{gb}</span>
+                                      <Badge variant="outline" className="ml-auto mr-2">
+                                        {gbCount}
+                                      </Badge>
+                                    </Button>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => copyIMEIs(gbDevices)}
+                                        title="Copy IMEIs"
+                                        data-testid={`button-copy-gb-${gbKey}`}
+                                      >
+                                        <Copy className="w-3 h-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => downloadFullData(gbDevices)}
+                                        title="Download CSV"
+                                        data-testid={`button-download-gb-${gbKey}`}
+                                      >
+                                        <Download className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
 
                                   {expandedGB.has(gbKey) && (
                                     <div className="space-y-1 pl-4 border-l border-border ml-2">
@@ -293,7 +388,8 @@ const ExpandableGradeSection = memo(({ items }: ExpandableGradeSectionProps) => 
               )}
             </CardContent>
           </Card>
-        ))}
+        );
+        })}
       </div>
 
       <Dialog open={selectedDevices !== null} onOpenChange={() => setSelectedDevices(null)}>
