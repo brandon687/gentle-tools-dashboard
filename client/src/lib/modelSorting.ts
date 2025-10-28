@@ -200,3 +200,31 @@ export function sortColors(a?: string, b?: string): number {
   if (!b) return -1;
   return a.localeCompare(b);
 }
+
+/**
+ * Sort by lock status - UNLOCKED items first, then LOCKED, then everything else
+ */
+export function sortByLockStatus<T extends { lockStatus?: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => {
+    const statusA = a.lockStatus?.toUpperCase();
+    const statusB = b.lockStatus?.toUpperCase();
+    
+    // If both have the same status or both are undefined
+    if (statusA === statusB) return 0;
+    
+    // UNLOCKED items come first
+    if (statusA === 'UNLOCKED') return -1;
+    if (statusB === 'UNLOCKED') return 1;
+    
+    // Then LOCKED items
+    if (statusA === 'LOCKED') return -1;
+    if (statusB === 'LOCKED') return 1;
+    
+    // Everything else comes last
+    if (!statusA) return 1;
+    if (!statusB) return -1;
+    
+    // Alphabetical sort for other statuses
+    return statusA.localeCompare(statusB);
+  });
+}

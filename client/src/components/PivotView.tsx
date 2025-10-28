@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight, Copy, Check, Download, ArrowDownWideNarrow, 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { downloadCSV } from "@/lib/exportUtils";
-import { sortModelsByHierarchy, sortGBOptions, sortColors } from "@/lib/modelSorting";
+import { sortModelsByHierarchy, sortGBOptions, sortColors, sortByLockStatus } from "@/lib/modelSorting";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface PivotViewProps {
@@ -85,6 +85,17 @@ const PivotView = memo(({ items }: PivotViewProps) => {
       
       models[model].gbGroups[gb].colorGroups[color].totalDevices++;
       models[model].gbGroups[gb].colorGroups[color].items.push(item);
+    });
+    
+    // Sort items by lock status (UNLOCKED first) in all groups
+    Object.values(models).forEach(modelGroup => {
+      modelGroup.items = sortByLockStatus(modelGroup.items);
+      Object.values(modelGroup.gbGroups).forEach(gbGroup => {
+        gbGroup.items = sortByLockStatus(gbGroup.items);
+        Object.values(gbGroup.colorGroups).forEach(colorGroup => {
+          colorGroup.items = sortByLockStatus(colorGroup.items);
+        });
+      });
     });
     
     return Object.values(models);
