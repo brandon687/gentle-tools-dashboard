@@ -4,7 +4,6 @@ import { InventoryItem, InventoryDataResponse } from "@shared/schema";
 import Header from "@/components/Header";
 import DashboardStats from "@/components/DashboardStats";
 import ExpandableGradeSection from "@/components/ExpandableGradeSection";
-import InventoryTable from "@/components/InventoryTable";
 import PivotView from "@/components/PivotView";
 import ItemDetailSheet from "@/components/ItemDetailSheet";
 import InvMatchDialog from "@/components/InvMatchDialog";
@@ -13,16 +12,12 @@ import ExportButtons from "@/components/ExportButtons";
 import EmptyFilterState from "@/components/EmptyFilterState";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Table, Grid3x3, Scan, AlertCircle, Database, AlertTriangle } from "lucide-react";
+import { Scan, AlertCircle, Database, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useDebounce } from "@/hooks/useDebounce";
 
 export default function Dashboard() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const debouncedSearchQuery = useDebounce(searchQuery, 150);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'table' | 'pivot'>('table');
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
   const [activeDataset, setActiveDataset] = useState<'physical' | 'graded'>('physical');
   const [isPending, startTransition] = useTransition();
@@ -50,19 +45,6 @@ export default function Dashboard() {
   const filteredItems = useMemo(() => {
     let items = currentItems;
 
-    if (debouncedSearchQuery.trim()) {
-      const query = debouncedSearchQuery.toLowerCase();
-      items = items.filter(item => 
-        item.imei?.toLowerCase().includes(query) ||
-        item.model?.toLowerCase().includes(query) ||
-        item.grade?.toLowerCase().includes(query) ||
-        item.gb?.toLowerCase().includes(query) ||
-        item.color?.toLowerCase().includes(query) ||
-        item.lockStatus?.toLowerCase().includes(query) ||
-        item.concat?.toLowerCase().includes(query)
-      );
-    }
-
     if (filterGrade && filterGrade !== 'all') {
       items = items.filter(item => item.grade === filterGrade);
     }
@@ -80,7 +62,7 @@ export default function Dashboard() {
     }
 
     return items;
-  }, [currentItems, debouncedSearchQuery, filterGrade, filterModel, filterGB, filterColor, filterLockStatus]);
+  }, [currentItems, filterGrade, filterModel, filterGB, filterColor, filterLockStatus]);
 
   const handleViewDetails = useCallback((item: InventoryItem) => {
     setSelectedItem(item);
@@ -102,8 +84,8 @@ export default function Dashboard() {
   }, []);
 
   const hasActiveFilters = useMemo(() => {
-    return !!(filterGrade || filterModel || filterGB || filterColor || filterLockStatus || debouncedSearchQuery.trim());
-  }, [filterGrade, filterModel, filterGB, filterColor, filterLockStatus, debouncedSearchQuery]);
+    return !!(filterGrade || filterModel || filterGB || filterColor || filterLockStatus);
+  }, [filterGrade, filterModel, filterGB, filterColor, filterLockStatus]);
 
   const allItems = useMemo(() => {
     if (!inventoryData) return [];
@@ -114,8 +96,6 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-background">
         <Header
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           onRefresh={handleRefresh}
           isRefreshing={isRefetching}
         />
@@ -141,8 +121,6 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-background">
         <Header
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
           onRefresh={handleRefresh}
           isRefreshing={isRefetching}
         />
@@ -225,19 +203,6 @@ export default function Dashboard() {
                     <Scan className="w-4 h-4 mr-2" />
                     INV MATCH
                   </Button>
-
-                  <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
-                    <TabsList>
-                      <TabsTrigger value="table" data-testid="tab-table-view">
-                        <Table className="w-4 h-4 mr-2" />
-                        Table View
-                      </TabsTrigger>
-                      <TabsTrigger value="pivot" data-testid="tab-pivot-view">
-                        <Grid3x3 className="w-4 h-4 mr-2" />
-                        Pivot View
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
                 </div>
               </div>
 
@@ -258,11 +223,6 @@ export default function Dashboard() {
 
               {filteredItems.length === 0 ? (
                 <EmptyFilterState hasActiveFilters={hasActiveFilters} />
-              ) : viewMode === 'table' ? (
-                <InventoryTable
-                  items={filteredItems}
-                  onViewDetails={handleViewDetails}
-                />
               ) : (
                 <PivotView
                   items={filteredItems}
@@ -301,19 +261,6 @@ export default function Dashboard() {
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <ExportButtons items={filteredItems} />
-
-                  <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)}>
-                    <TabsList>
-                      <TabsTrigger value="table" data-testid="tab-table-view">
-                        <Table className="w-4 h-4 mr-2" />
-                        Table View
-                      </TabsTrigger>
-                      <TabsTrigger value="pivot" data-testid="tab-pivot-view">
-                        <Grid3x3 className="w-4 h-4 mr-2" />
-                        Pivot View
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
                 </div>
               </div>
 
@@ -334,11 +281,6 @@ export default function Dashboard() {
 
               {filteredItems.length === 0 ? (
                 <EmptyFilterState hasActiveFilters={hasActiveFilters} />
-              ) : viewMode === 'table' ? (
-                <InventoryTable
-                  items={filteredItems}
-                  onViewDetails={handleViewDetails}
-                />
               ) : (
                 <PivotView
                   items={filteredItems}
