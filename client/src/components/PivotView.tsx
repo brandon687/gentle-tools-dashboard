@@ -37,6 +37,7 @@ interface ColorData {
 const PivotView = memo(({ items }: PivotViewProps) => {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const [expandedGB, setExpandedGB] = useState<Set<string>>(new Set());
+  const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'quantity' | 'release'>('release');
   const { toast } = useToast();
@@ -117,6 +118,18 @@ const PivotView = memo(({ items }: PivotViewProps) => {
         newSet.delete(modelGbKey);
       } else {
         newSet.add(modelGbKey);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleColor = (colorKey: string) => {
+    setExpandedColors(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(colorKey)) {
+        newSet.delete(colorKey);
+      } else {
+        newSet.add(colorKey);
       }
       return newSet;
     });
@@ -328,54 +341,99 @@ const PivotView = memo(({ items }: PivotViewProps) => {
                                   .sort((a, b) => b.totalDevices - a.totalDevices)
                                   .map((colorGroup) => {
                                     const colorKey = `${gbKey}-${colorGroup.color}`;
+                                    const isColorExpanded = expandedColors.has(colorKey);
                                     
                                     return (
                                       <div
                                         key={colorKey}
-                                        className="p-2 rounded-md bg-muted/30"
+                                        className="rounded-md bg-muted/30 overflow-hidden"
                                       >
-                                        <div className="flex items-center justify-between gap-2 mb-2">
-                                          <p className="text-sm">{colorGroup.color}</p>
-                                          <Badge variant="outline" className="flex-shrink-0">
-                                            {colorGroup.totalDevices}
-                                          </Badge>
+                                        <div 
+                                          className="p-2 cursor-pointer hover-elevate active-elevate-2"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleColor(colorKey);
+                                          }}
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                              {isColorExpanded ? (
+                                                <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                                              ) : (
+                                                <ChevronRight className="w-3 h-3 flex-shrink-0" />
+                                              )}
+                                              <p className="text-sm">{colorGroup.color}</p>
+                                            </div>
+                                            <Badge variant="outline" className="flex-shrink-0">
+                                              {colorGroup.totalDevices}
+                                            </Badge>
+                                          </div>
                                         </div>
-                                        <div className="flex gap-1">
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="flex-1 h-7 text-xs"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              copyIMEIsToClipboard(colorGroup.items, colorKey);
-                                            }}
-                                            data-testid={`button-copy-color-${colorKey.toLowerCase().replace(/\s+/g, '-')}`}
-                                          >
-                                            {copiedGroup === colorKey ? (
-                                              <>
-                                                <Check className="w-3 h-3 mr-1" />
-                                                Copied
-                                              </>
-                                            ) : (
-                                              <>
-                                                <Copy className="w-3 h-3 mr-1" />
-                                                Copy
-                                              </>
-                                            )}
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 px-2"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              downloadFullData(colorGroup.items, `${modelGroup.model}-${gbGroup.gb}-${colorGroup.color}.csv`);
-                                            }}
-                                            data-testid={`button-download-color-${colorKey.toLowerCase().replace(/\s+/g, '-')}`}
-                                          >
-                                            <Download className="w-3 h-3" />
-                                          </Button>
+                                        <div className="px-2 pb-2">
+                                          <div className="flex gap-1">
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="flex-1 h-7 text-xs"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                copyIMEIsToClipboard(colorGroup.items, colorKey);
+                                              }}
+                                              data-testid={`button-copy-color-${colorKey.toLowerCase().replace(/\s+/g, '-')}`}
+                                            >
+                                              {copiedGroup === colorKey ? (
+                                                <>
+                                                  <Check className="w-3 h-3 mr-1" />
+                                                  Copied
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Copy className="w-3 h-3 mr-1" />
+                                                  Copy
+                                                </>
+                                              )}
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-7 px-2"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                downloadFullData(colorGroup.items, `${modelGroup.model}-${gbGroup.gb}-${colorGroup.color}.csv`);
+                                              }}
+                                              data-testid={`button-download-color-${colorKey.toLowerCase().replace(/\s+/g, '-')}`}
+                                            >
+                                              <Download className="w-3 h-3" />
+                                            </Button>
+                                          </div>
                                         </div>
+                                        
+                                        {isColorExpanded && colorGroup.items.length > 0 && (
+                                          <div className="border-t bg-background/50 max-h-96 overflow-auto">
+                                            <table className="w-full text-xs">
+                                              <thead className="sticky top-0 bg-muted text-muted-foreground uppercase">
+                                                <tr>
+                                                  <th className="px-2 py-1 text-left font-medium">IMEI</th>
+                                                  <th className="px-2 py-1 text-left font-medium">Lock Status</th>
+                                                  <th className="px-2 py-1 text-left font-medium">Grade</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {colorGroup.items.map((item, idx) => (
+                                                  <tr 
+                                                    key={idx} 
+                                                    className="border-b hover-elevate cursor-pointer"
+                                                    data-testid={`device-row-${idx}`}
+                                                  >
+                                                    <td className="px-2 py-1 font-mono">{item.imei || 'N/A'}</td>
+                                                    <td className="px-2 py-1">{item.lockStatus || 'N/A'}</td>
+                                                    <td className="px-2 py-1">{item.grade || 'N/A'}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })}
