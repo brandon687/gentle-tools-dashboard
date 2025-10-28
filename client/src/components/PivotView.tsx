@@ -40,13 +40,31 @@ const PivotView = memo(({ items }: PivotViewProps) => {
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<'quantity' | 'release'>('release');
+  const [gradeFilter, setGradeFilter] = useState<'all' | 'A' | 'AB'>('all');
   const { toast } = useToast();
+
+  // Filter items by grade - normalize grade values to handle variations like "A GRADE", "A", etc.
+  const filteredItems = useMemo(() => {
+    if (gradeFilter === 'all') return items;
+    return items.filter(item => {
+      if (!item.grade) return false;
+      // Normalize grade by removing "GRADE" suffix and any extra whitespace
+      const normalizedGrade = item.grade
+        .toUpperCase()
+        .replace(/\s+GRADE\s*$/i, '')  // Remove " GRADE" suffix
+        .replace(/\s+/g, ' ')           // Normalize whitespace
+        .trim();
+      
+      // Check for exact match
+      return normalizedGrade === gradeFilter;
+    });
+  }, [items, gradeFilter]);
 
   // Separate grouping from sorting for performance - only rebuild when items change
   const groupedModels = useMemo(() => {
     const models: { [key: string]: ModelData } = {};
     
-    items.forEach(item => {
+    filteredItems.forEach(item => {
       const model = item.model || 'Unknown';
       const gb = item.gb || 'Unknown';
       const color = item.color || 'Unknown';
@@ -99,7 +117,7 @@ const PivotView = memo(({ items }: PivotViewProps) => {
     });
     
     return Object.values(models);
-  }, [items]);
+  }, [filteredItems]);
   
   // Apply sorting separately - cheap operation that doesn't rebuild data structures
   const modelData = useMemo(() => {
@@ -180,22 +198,45 @@ const PivotView = memo(({ items }: PivotViewProps) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 pb-2 border-b">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">Sort by:</span>
-          <Tabs value={sortMode} onValueChange={(value) => setSortMode(value as 'quantity' | 'release')}>
-            <TabsList>
-              <TabsTrigger value="release" className="gap-2" data-testid="sort-release">
-                <Calendar className="w-4 h-4" />
-                Release Order
-              </TabsTrigger>
-              <TabsTrigger value="quantity" className="gap-2" data-testid="sort-quantity">
-                <ArrowDownWideNarrow className="w-4 h-4" />
-                Quantity
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Grade:</span>
+            <Tabs value={gradeFilter} onValueChange={(value) => setGradeFilter(value as 'all' | 'A' | 'AB')}>
+              <TabsList>
+                <TabsTrigger value="all" data-testid="grade-all">
+                  All ({items.length})
+                </TabsTrigger>
+                <TabsTrigger value="A" data-testid="grade-a">
+                  A ({items.filter(i => i.grade && i.grade.toUpperCase().replace(/\s+GRADE\s*$/i, '').replace(/\s+/g, ' ').trim() === 'A').length})
+                </TabsTrigger>
+                <TabsTrigger value="AB" data-testid="grade-ab">
+                  AB ({items.filter(i => i.grade && i.grade.toUpperCase().replace(/\s+GRADE\s*$/i, '').replace(/\s+/g, ' ').trim() === 'AB').length})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Sort by:</span>
+            <Tabs value={sortMode} onValueChange={(value) => setSortMode(value as 'quantity' | 'release')}>
+              <TabsList>
+                <TabsTrigger value="release" className="gap-2" data-testid="sort-release">
+                  <Calendar className="w-4 h-4" />
+                  Release Order
+                </TabsTrigger>
+                <TabsTrigger value="quantity" className="gap-2" data-testid="sort-quantity">
+                  <ArrowDownWideNarrow className="w-4 h-4" />
+                  Quantity
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
       </div>
+      {gradeFilter !== 'all' && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-3 py-2 rounded-md">
+          <span>Showing {filteredItems.length} of {items.length} devices (Grade {gradeFilter} only)</span>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {modelData.map((modelGroup) => {
           const isModelExpanded = expandedModels.has(modelGroup.model);
