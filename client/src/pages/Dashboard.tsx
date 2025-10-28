@@ -139,8 +139,6 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <Header
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
         onRefresh={handleRefresh}
         isRefreshing={isRefetching}
       />
