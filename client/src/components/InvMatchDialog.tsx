@@ -6,10 +6,12 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -17,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Copy, Check, AlertCircle, CheckCircle2, Minus, AlertTriangle } from "lucide-react";
+import { Copy, Check, AlertCircle, CheckCircle2, Minus, AlertTriangle, Save, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -36,11 +38,21 @@ interface InvMatchDialogProps {
 }
 
 export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDialogProps) {
+  const [selectedGrade, setSelectedGrade] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [selectedGB, setSelectedGB] = useState<string>("");
+  const [selectedColor, setSelectedColor] = useState<string>("");
+  const [selectedLockStatus, setSelectedLockStatus] = useState<string>("");
   const [pastedIMEIs, setPastedIMEIs] = useState("");
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [operatorName, setOperatorName] = useState("");
   const { toast } = useToast();
+
+  const grades = useMemo(() => {
+    const gradeSet = new Set(items.map(item => item.grade).filter(Boolean));
+    return Array.from(gradeSet).sort();
+  }, [items]);
 
   const models = useMemo(() => {
     const modelSet = new Set(items.map(item => item.model).filter(Boolean));
@@ -52,13 +64,26 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
     return Array.from(gbSet).sort();
   }, [items]);
 
+  const colors = useMemo(() => {
+    const colorSet = new Set(items.map(item => item.color).filter(Boolean));
+    return Array.from(colorSet).sort();
+  }, [items]);
+
+  const lockStatuses = useMemo(() => {
+    const statusSet = new Set(items.map(item => item.lockStatus).filter(Boolean));
+    return Array.from(statusSet).sort();
+  }, [items]);
+
   const filteredInventory = useMemo(() => {
     return items.filter(item => {
+      const gradeMatch = !selectedGrade || selectedGrade === "all" || item.grade === selectedGrade;
       const modelMatch = !selectedModel || selectedModel === "all" || item.model === selectedModel;
       const gbMatch = !selectedGB || selectedGB === "all" || item.gb === selectedGB;
-      return modelMatch && gbMatch;
+      const colorMatch = !selectedColor || selectedColor === "all" || item.color === selectedColor;
+      const lockStatusMatch = !selectedLockStatus || selectedLockStatus === "all" || item.lockStatus === selectedLockStatus;
+      return gradeMatch && modelMatch && gbMatch && colorMatch && lockStatusMatch;
     });
-  }, [items, selectedModel, selectedGB]);
+  }, [items, selectedGrade, selectedModel, selectedGB, selectedColor, selectedLockStatus]);
 
   const masterInventoryMap = useMemo(() => {
     const map = new Map<string, InventoryItem>();
@@ -170,9 +195,78 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
   };
 
   const handleReset = () => {
+    setSelectedGrade("");
     setSelectedModel("");
     setSelectedGB("");
+    setSelectedColor("");
+    setSelectedLockStatus("");
     setPastedIMEIs("");
+  };
+
+  const handleSaveWorksheet = () => {
+    if (!operatorName.trim()) {
+      toast({
+        title: "Operator Name Required",
+        description: "Please enter the operator name before saving the worksheet.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const worksheetData = {
+      timestamp,
+      operator: operatorName.trim(),
+      filters: {
+        grade: selectedGrade || 'all',
+        model: selectedModel || 'all',
+        gb: selectedGB || 'all',
+        color: selectedColor || 'all',
+        lockStatus: selectedLockStatus || 'all',
+      },
+      stats: {
+        inventoryCount: filteredInventory.length,
+        scannedCount: parsedIMEIs.length,
+        matchedCount,
+        wrongModelCount: wrongModelIMEIs.length,
+        notFoundCount: notFoundIMEIs.length,
+      },
+      scannedIMEIs: parsedIMEIs,
+      notFoundIMEIs,
+      wrongModelIMEIs: wrongModelIMEIs.map(item => ({
+        imei: item.imei,
+        actualModel: item.item.model,
+        actualGB: item.item.gb,
+        actualColor: item.item.color,
+        actualGrade: item.item.grade,
+        actualLockStatus: item.item.lockStatus,
+      })),
+      matchedItems: filteredInventory.filter(item => 
+        item.imei && scannedIMEISet.has(item.imei.trim())
+      ),
+    };
+
+    // Save to localStorage
+    const savedWorksheets = JSON.parse(localStorage.getItem('inventoryWorksheets') || '[]');
+    savedWorksheets.push(worksheetData);
+    localStorage.setItem('inventoryWorksheets', JSON.stringify(savedWorksheets));
+
+    // Download as JSON file
+    const blob = new Blob([JSON.stringify(worksheetData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `worksheet_${timestamp}_${operatorName.replace(/\s+/g, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Worksheet Saved",
+      description: `Worksheet saved successfully for operator: ${operatorName}`,
+    });
+    
+    setShowSaveDialog(false);
+    setOperatorName("");
   };
 
   return (
@@ -186,11 +280,28 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
         </DialogHeader>
 
         <div className="space-y-4 flex-shrink-0">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="model-select">Filter by Model</Label>
+              <Label htmlFor="grade-select" className="text-xs">Grade</Label>
+              <Select value={selectedGrade} onValueChange={setSelectedGrade}>
+                <SelectTrigger id="grade-select" data-testid="select-grade" className="h-9">
+                  <SelectValue placeholder="All Grades" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Grades</SelectItem>
+                  {grades.map(grade => (
+                    <SelectItem key={grade} value={grade || ""}>
+                      {grade}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="model-select" className="text-xs">Model</Label>
               <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger id="model-select" data-testid="select-model">
+                <SelectTrigger id="model-select" data-testid="select-model" className="h-9">
                   <SelectValue placeholder="All Models" />
                 </SelectTrigger>
                 <SelectContent>
@@ -205,9 +316,9 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="gb-select">Filter by Storage</Label>
+              <Label htmlFor="gb-select" className="text-xs">Storage</Label>
               <Select value={selectedGB} onValueChange={setSelectedGB}>
-                <SelectTrigger id="gb-select" data-testid="select-gb">
+                <SelectTrigger id="gb-select" data-testid="select-gb" className="h-9">
                   <SelectValue placeholder="All Storage" />
                 </SelectTrigger>
                 <SelectContent>
@@ -222,17 +333,48 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
             </div>
 
             <div className="space-y-2">
-              <Label>Stats</Label>
-              <div className="flex items-center gap-2 h-9 px-3 border rounded-md bg-muted">
-                <span className="text-sm">
-                  Inventory: <strong>{filteredInventory.length}</strong> • 
-                  Scanned: <strong>{parsedIMEIs.length}</strong> • 
-                  Matched: <strong className="text-green-600">{matchedCount}</strong> • 
-                  Wrong Model: <strong className="text-yellow-600">{wrongModelIMEIs.length}</strong> • 
-                  Not Found: <strong className="text-red-600">{notFoundIMEIs.length}</strong>
-                </span>
-              </div>
+              <Label htmlFor="color-select" className="text-xs">Color</Label>
+              <Select value={selectedColor} onValueChange={setSelectedColor}>
+                <SelectTrigger id="color-select" data-testid="select-color" className="h-9">
+                  <SelectValue placeholder="All Colors" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Colors</SelectItem>
+                  {colors.map(color => (
+                    <SelectItem key={color} value={color || ""}>
+                      {color}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="lock-select" className="text-xs">Lock Status</Label>
+              <Select value={selectedLockStatus} onValueChange={setSelectedLockStatus}>
+                <SelectTrigger id="lock-select" data-testid="select-lock" className="h-9">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  {lockStatuses.map(status => (
+                    <SelectItem key={status} value={status || ""}>
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-2 border rounded-md bg-muted">
+            <span className="text-sm">
+              Inventory: <strong>{filteredInventory.length}</strong> • 
+              Scanned: <strong>{parsedIMEIs.length}</strong> • 
+              Matched: <strong className="text-green-600">{matchedCount}</strong> • 
+              Wrong Model: <strong className="text-yellow-600">{wrongModelIMEIs.length}</strong> • 
+              Not Found: <strong className="text-red-600">{notFoundIMEIs.length}</strong>
+            </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -428,12 +570,81 @@ export default function InvMatchDialog({ open, onOpenChange, items }: InvMatchDi
           </div>
         </div>
 
-        <div className="flex items-center justify-end pt-4 border-t flex-shrink-0">
+        <div className="flex items-center justify-between pt-4 border-t flex-shrink-0">
+          <Button
+            variant="outline"
+            onClick={() => setShowSaveDialog(true)}
+            disabled={parsedIMEIs.length === 0}
+            data-testid="button-save-worksheet"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Save Worksheet
+          </Button>
           <Button variant="ghost" onClick={() => onOpenChange(false)} data-testid="button-close">
             Close
           </Button>
         </div>
       </DialogContent>
+      
+      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save Worksheet</DialogTitle>
+            <DialogDescription>
+              Save the current inventory match session as a worksheet
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Timestamp</Label>
+              <Input 
+                value={new Date().toLocaleString()} 
+                disabled 
+                className="bg-muted"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="operator-name">Operator Name *</Label>
+              <Input
+                id="operator-name"
+                placeholder="Enter your name"
+                value={operatorName}
+                onChange={(e) => setOperatorName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && operatorName.trim()) {
+                    handleSaveWorksheet();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>This worksheet will include:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Current filters and settings</li>
+                <li>Scanned IMEIs ({parsedIMEIs.length} items)</li>
+                <li>Match results and statistics</li>
+              </ul>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowSaveDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveWorksheet}
+              disabled={!operatorName.trim()}
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Save & Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
