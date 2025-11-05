@@ -30,15 +30,12 @@ export default function Dashboard() {
   const [filterLockStatus, setFilterLockStatus] = useState("");
   const [searchIMEI, setSearchIMEI] = useState("");
 
-  // Shipped IMEIs stored in localStorage
-  const [shippedIMEIs, setShippedIMEIs] = useState<string[]>(() => {
-    const stored = localStorage.getItem('shippedIMEIs');
-    return stored ? JSON.parse(stored) : [];
+  // Shipped IMEIs fetched from server
+  const { data: shippedIMEIs = [], refetch: refetchShippedIMEIs } = useQuery<string[]>({
+    queryKey: ['/api/shipped-imeis'],
+    refetchOnWindowFocus: true,
+    staleTime: 0, // Always fetch fresh data
   });
-
-  useEffect(() => {
-    localStorage.setItem('shippedIMEIs', JSON.stringify(shippedIMEIs));
-  }, [shippedIMEIs]);
 
   const { data: inventoryData, isLoading, error, refetch, isRefetching } = useQuery<InventoryDataResponse>({
     queryKey: ['/api/inventory'],
@@ -357,7 +354,7 @@ export default function Dashboard() {
           <TabsContent value="shipped" className="space-y-6">
             <ShippedIMEIsManager
               shippedIMEIs={shippedIMEIs}
-              onUpdateShippedIMEIs={setShippedIMEIs}
+              onUpdateShippedIMEIs={() => refetchShippedIMEIs()}
             />
           </TabsContent>
         </Tabs>

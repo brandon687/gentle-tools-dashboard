@@ -5,24 +5,69 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Package, Trash2, Copy, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface ShippedIMEIsManagerProps {
   shippedIMEIs: string[];
-  onUpdateShippedIMEIs: (imeis: string[]) => void;
+  onUpdateShippedIMEIs: () => void;
 }
 
 export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs }: ShippedIMEIsManagerProps) {
   const [inputText, setInputText] = useState("");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const handleAddIMEIs = () => {
+  const addIMEIsMutation = useMutation({
+    mutationFn: async (imeis: string[]) => {
+      const res = await fetch('/api/shipped-imeis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imeis }),
+      });
+      if (!res.ok) throw new Error('Failed to add IMEIs');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/shipped-imeis'] });
+      onUpdateShippedIMEIs();
+    },
+  });
+
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/shipped-imeis', {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to clear IMEIs');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/shipped-imeis'] });
+      onUpdateShippedIMEIs();
+    },
+  });
+
+  const deleteIMEIMutation = useMutation({
+    mutationFn: async (imei: string) => {
+      const res = await fetch(`/api/shipped-imeis/${encodeURIComponent(imei)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete IMEI');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/shipped-imeis'] });
+      onUpdateShippedIMEIs();
+    },
+  });
+
+  const handleAddIMEIs = async () => {
     const lines = inputText
       .split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0);
 
-    const newIMEIs = [...new Set([...shippedIMEIs, ...lines])];
-    onUpdateShippedIMEIs(newIMEIs);
+    await addIMEIsMutation.mutateAsync(lines);
     setInputText("");
 
     toast({
@@ -31,9 +76,9 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
     });
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     if (confirm(`Are you sure you want to clear all ${shippedIMEIs.length} shipped IMEIs?`)) {
-      onUpdateShippedIMEIs([]);
+      await clearAllMutation.mutateAsync();
       toast({
         title: "Cleared",
         description: "All shipped IMEIs have been removed",
@@ -65,8 +110,8 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
     });
   };
 
-  const handleRemoveIMEI = (imei: string) => {
-    onUpdateShippedIMEIs(shippedIMEIs.filter(i => i !== imei));
+  const handleRemoveIMEI = async (imei: string) => {
+    await deleteIMEIMutation.mutateAsync(imei);
     toast({
       title: "Removed",
       description: `IMEI ${imei} removed from shipped list`,
