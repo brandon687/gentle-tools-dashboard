@@ -13,9 +13,9 @@ export default function Header({ onRefresh, isRefreshing }: HeaderProps) {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center">
-              <span className="text-primary-foreground font-semibold text-sm">IM</span>
+              <span className="text-primary-foreground font-semibold text-sm">GT</span>
             </div>
-            <h1 className="text-xl font-semibold">Inventory Manager</h1>
+            <h1 className="text-xl font-semibold">GENTLE TOOLS</h1>
           </div>
         </div>
 

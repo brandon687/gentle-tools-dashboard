@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 
-const SPREADSHEET_ID = '1zTL8bsHN5PCJpOXFuN18sZMun3yEZoA8XlZJKg6IRhM';
+const SPREADSHEET_ID = '1CbvbPLJGllfGsb4LWR1RWFktzFGLr8nNanxCz2KrCvw';
 const PHYSICAL_INVENTORY_SHEET = 'PHYSICAL INVENTORY';
 const GRADED_TO_FALLOUT_SHEET = 'GRADED TO FALLOUT';
 
@@ -34,13 +34,17 @@ async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetR
 
     const rows = response.data.values;
 
-    if (!rows || rows.length < 2) {
+    if (!rows || rows.length < 3) {
+      console.log(`[${sheetName}] Not enough rows, returning empty`);
       return [];
     }
 
-    // Headers are in row 1 (index 0), data starts from row 2 (index 1)
-    const headers = rows[0];
-    const dataRows = rows.slice(1);
+    // Row 1 is Coefficient banner, Row 2 (index 1) has headers, data starts from row 3 (index 2)
+    const headers = rows[1];
+    const dataRows = rows.slice(2);
+
+    console.log(`[${sheetName}] Headers:`, headers);
+    console.log(`[${sheetName}] Processing ${dataRows.length} data rows`);
 
     const headerMap = new Map<string, number>();
     headers.forEach((header, index) => {
@@ -56,6 +60,8 @@ async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetR
     };
 
     const inventoryItems: SheetRow[] = dataRows.map((row) => ({
+      _row: getColumnValue(row, '_ROW'),
+      _fivetran_synced: getColumnValue(row, '_FIVETRAN_SYNCED'),
       date: getColumnValue(row, 'DATE'),
       price: getColumnValue(row, 'PRICE'),
       color: getColumnValue(row, 'COLOR'),
@@ -63,7 +69,7 @@ async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetR
       imei: getColumnValue(row, 'IMEI'),
       model: getColumnValue(row, 'MODEL'),
       gb: getColumnValue(row, 'GB'),
-      lockStatus: getColumnValue(row, 'LOCK STATUS'),
+      lockStatus: getColumnValue(row, 'LOCK_STATUS'),
       age: getColumnValue(row, 'AGE'),
     }));
 
@@ -76,18 +82,15 @@ async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetR
 
 export async function fetchInventoryData(): Promise<InventoryDataResponse> {
   const apiKey = process.env.GOOGLE_API_KEY;
-  
+
   if (!apiKey) {
     throw new Error('GOOGLE_API_KEY is not configured');
   }
 
-  const [physicalInventory, gradedToFallout] = await Promise.all([
-    fetchSheetData(PHYSICAL_INVENTORY_SHEET, apiKey),
-    fetchSheetData(GRADED_TO_FALLOUT_SHEET, apiKey),
-  ]);
+  const physicalInventory = await fetchSheetData(PHYSICAL_INVENTORY_SHEET, apiKey);
 
   return {
     physicalInventory,
-    gradedToFallout,
+    gradedToFallout: [], // Not using this sheet for now
   };
 }

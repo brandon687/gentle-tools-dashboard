@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useTransition } from "react";
+import { useState, useMemo, useCallback, useTransition, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { InventoryItem, InventoryDataResponse } from "@shared/schema";
 import Header from "@/components/Header";
@@ -10,16 +10,17 @@ import InvMatchDialog from "@/components/InvMatchDialog";
 import InventoryFilters from "@/components/InventoryFilters";
 import ExportButtons from "@/components/ExportButtons";
 import EmptyFilterState from "@/components/EmptyFilterState";
+import ShippedIMEIsManager from "@/components/ShippedIMEIsManager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Scan, AlertCircle, Database, AlertTriangle } from "lucide-react";
+import { Scan, AlertCircle, Database, Package } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function Dashboard() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
-  const [activeDataset, setActiveDataset] = useState<'physical' | 'graded'>('physical');
+  const [activeDataset, setActiveDataset] = useState<'physical' | 'reconciled' | 'shipped'>('physical');
   const [isPending, startTransition] = useTransition();
 
   const [filterGrade, setFilterGrade] = useState("");
@@ -27,6 +28,16 @@ export default function Dashboard() {
   const [filterGB, setFilterGB] = useState("");
   const [filterColor, setFilterColor] = useState("");
   const [filterLockStatus, setFilterLockStatus] = useState("");
+
+  // Shipped IMEIs stored in localStorage
+  const [shippedIMEIs, setShippedIMEIs] = useState<string[]>(() => {
+    const stored = localStorage.getItem('shippedIMEIs');
+    return stored ? JSON.parse(stored) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('shippedIMEIs', JSON.stringify(shippedIMEIs));
+  }, [shippedIMEIs]);
 
   const { data: inventoryData, isLoading, error, refetch, isRefetching } = useQuery<InventoryDataResponse>({
     queryKey: ['/api/inventory'],
@@ -37,10 +48,21 @@ export default function Dashboard() {
 
   const currentItems = useMemo(() => {
     if (!inventoryData) return [];
-    return activeDataset === 'physical' 
-      ? inventoryData.physicalInventory 
-      : inventoryData.gradedToFallout;
-  }, [inventoryData, activeDataset]);
+
+    // Physical inventory - excludes shipped IMEIs (live adjusted view)
+    if (activeDataset === 'physical') {
+      const shippedSet = new Set(shippedIMEIs);
+      return inventoryData.physicalInventory.filter(item => !shippedSet.has(item.imei || ''));
+    }
+
+    // Reconciled inventory - only shows items that have been marked as shipped
+    if (activeDataset === 'reconciled') {
+      const shippedSet = new Set(shippedIMEIs);
+      return inventoryData.physicalInventory.filter(item => shippedSet.has(item.imei || ''));
+    }
+
+    return [];
+  }, [inventoryData, activeDataset, shippedIMEIs]);
 
   const filteredItems = useMemo(() => {
     let items = currentItems;
@@ -145,21 +167,25 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         <div>
-          <h2 className="text-3xl font-semibold mb-2">Inventory Management</h2>
+          <h2 className="text-3xl font-semibold mb-2">GENTLE TOOLS</h2>
           <p className="text-muted-foreground">
             Real-time data from Google Sheets • Click grade cards to drill down • Double-click quantities for IMEIs
           </p>
         </div>
 
         <Tabs value={activeDataset} onValueChange={(v) => setActiveDataset(v as any)} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-3xl grid-cols-3">
             <TabsTrigger value="physical" data-testid="tab-physical-inventory">
               <Database className="w-4 h-4 mr-2" />
               Physical Inventory
             </TabsTrigger>
-            <TabsTrigger value="graded" data-testid="tab-graded-fallout">
-              <AlertTriangle className="w-4 h-4 mr-2" />
-              Graded to Fallout
+            <TabsTrigger value="reconciled" data-testid="tab-reconciled-inventory">
+              <Scan className="w-4 h-4 mr-2" />
+              Reconciled Inventory
+            </TabsTrigger>
+            <TabsTrigger value="shipped" data-testid="tab-shipped-items">
+              <Package className="w-4 h-4 mr-2" />
+              Shipped Items ({shippedIMEIs.length})
             </TabsTrigger>
           </TabsList>
 
@@ -230,22 +256,22 @@ export default function Dashboard() {
             </div>
           </TabsContent>
 
-          <TabsContent value="graded" className="space-y-6">
+          <TabsContent value="reconciled" className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
                 Quick Insights
               </h3>
-              <DashboardStats items={inventoryData?.gradedToFallout || []} />
+              <DashboardStats items={currentItems} />
             </div>
 
             <div>
               <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
                 Breakdown by Grade
                 <span className="font-normal text-base ml-3 normal-case">
-                  ({inventoryData?.gradedToFallout.length || 0} total devices • Click to expand)
+                  ({currentItems.length} total devices • Click to expand)
                 </span>
               </h3>
-              <ExpandableGradeSection items={inventoryData?.gradedToFallout || []} />
+              <ExpandableGradeSection items={currentItems} />
             </div>
 
             <div className="space-y-4">
@@ -286,6 +312,13 @@ export default function Dashboard() {
                 />
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="shipped" className="space-y-6">
+            <ShippedIMEIsManager
+              shippedIMEIs={shippedIMEIs}
+              onUpdateShippedIMEIs={setShippedIMEIs}
+            />
           </TabsContent>
         </Tabs>
       </main>
