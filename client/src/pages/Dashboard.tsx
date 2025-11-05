@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [filterGB, setFilterGB] = useState("");
   const [filterColor, setFilterColor] = useState("");
   const [filterLockStatus, setFilterLockStatus] = useState("");
+  const [searchIMEI, setSearchIMEI] = useState("");
 
   // Shipped IMEIs stored in localStorage
   const [shippedIMEIs, setShippedIMEIs] = useState<string[]>(() => {
@@ -67,6 +68,14 @@ export default function Dashboard() {
   const filteredItems = useMemo(() => {
     let items = currentItems;
 
+    // IMEI search filter
+    if (searchIMEI.trim()) {
+      const searchTerm = searchIMEI.trim().toLowerCase();
+      items = items.filter(item =>
+        item.imei?.toLowerCase().includes(searchTerm)
+      );
+    }
+
     if (filterGrade && filterGrade !== 'all') {
       items = items.filter(item => item.grade === filterGrade);
     }
@@ -84,7 +93,7 @@ export default function Dashboard() {
     }
 
     return items;
-  }, [currentItems, filterGrade, filterModel, filterGB, filterColor, filterLockStatus]);
+  }, [currentItems, filterGrade, filterModel, filterGB, filterColor, filterLockStatus, searchIMEI]);
 
   const handleViewDetails = useCallback((item: InventoryItem) => {
     setSelectedItem(item);
@@ -102,12 +111,13 @@ export default function Dashboard() {
       setFilterGB("");
       setFilterColor("");
       setFilterLockStatus("");
+      setSearchIMEI("");
     });
   }, []);
 
   const hasActiveFilters = useMemo(() => {
-    return !!(filterGrade || filterModel || filterGB || filterColor || filterLockStatus);
-  }, [filterGrade, filterModel, filterGB, filterColor, filterLockStatus]);
+    return !!(filterGrade || filterModel || filterGB || filterColor || filterLockStatus || searchIMEI);
+  }, [filterGrade, filterModel, filterGB, filterColor, filterLockStatus, searchIMEI]);
 
   const allItems = useMemo(() => {
     if (!inventoryData) return [];
@@ -257,6 +267,36 @@ export default function Dashboard() {
           </TabsContent>
 
           <TabsContent value="reconciled" className="space-y-6">
+            {/* IMEI Search Bar */}
+            <div className="bg-card border rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Scan className="w-5 h-5 text-muted-foreground" />
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    placeholder="Search by IMEI... (e.g., 355555754760571)"
+                    value={searchIMEI}
+                    onChange={(e) => setSearchIMEI(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                {searchIMEI && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchIMEI("")}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+              {searchIMEI && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Found {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''} matching "{searchIMEI}"
+                </p>
+              )}
+            </div>
+
             <div>
               <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
                 Quick Insights
