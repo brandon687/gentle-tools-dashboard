@@ -5,14 +5,16 @@ const PHYSICAL_INVENTORY_SHEET = 'PHYSICAL INVENTORY';
 const GRADED_TO_FALLOUT_SHEET = 'GRADED TO FALLOUT';
 
 export interface SheetRow {
-  imei?: string;
+  _row?: string;
+  _fivetran_synced?: string;
+  date?: string;
+  price?: string;
+  color?: string;
   grade?: string;
+  imei?: string;
   model?: string;
   gb?: string;
-  color?: string;
   lockStatus?: string;
-  date?: string;
-  concat?: string;
   age?: string;
 }
 
@@ -27,15 +29,16 @@ async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetR
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:I`,
+      range: `${sheetName}!A:K`,
     });
 
     const rows = response.data.values;
-    
-    if (!rows || rows.length === 0) {
+
+    if (!rows || rows.length < 2) {
       return [];
     }
 
+    // Headers are in row 1 (index 0), data starts from row 2 (index 1)
     const headers = rows[0];
     const dataRows = rows.slice(1);
 
@@ -53,14 +56,14 @@ async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetR
     };
 
     const inventoryItems: SheetRow[] = dataRows.map((row) => ({
-      imei: getColumnValue(row, 'IMEI'),
+      date: getColumnValue(row, 'DATE'),
+      price: getColumnValue(row, 'PRICE'),
+      color: getColumnValue(row, 'COLOR'),
       grade: getColumnValue(row, 'GRADE'),
+      imei: getColumnValue(row, 'IMEI'),
       model: getColumnValue(row, 'MODEL'),
       gb: getColumnValue(row, 'GB'),
-      color: getColumnValue(row, 'COLOR'),
       lockStatus: getColumnValue(row, 'LOCK STATUS'),
-      date: getColumnValue(row, 'DATE'),
-      concat: getColumnValue(row, 'CONCAT'),
       age: getColumnValue(row, 'AGE'),
     }));
 
