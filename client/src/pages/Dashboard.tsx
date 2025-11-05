@@ -13,14 +13,14 @@ import EmptyFilterState from "@/components/EmptyFilterState";
 import ShippedIMEIsManager from "@/components/ShippedIMEIsManager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Scan, AlertCircle, Database, Package } from "lucide-react";
+import { Scan, AlertCircle, Database, Package, BarChart3 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function Dashboard() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
-  const [activeDataset, setActiveDataset] = useState<'physical' | 'reconciled' | 'shipped'>('physical');
+  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'reconciled' | 'shipped'>('insights');
   const [isPending, startTransition] = useTransition();
 
   const [filterGrade, setFilterGrade] = useState("");
@@ -181,7 +181,11 @@ export default function Dashboard() {
         </div>
 
         <Tabs value={activeDataset} onValueChange={(v) => setActiveDataset(v as any)} className="space-y-6">
-          <TabsList className="grid w-full max-w-3xl grid-cols-3">
+          <TabsList className="grid w-full max-w-4xl grid-cols-4">
+            <TabsTrigger value="insights" data-testid="tab-quick-insights">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Quick Insights
+            </TabsTrigger>
             <TabsTrigger value="physical" data-testid="tab-physical-inventory">
               <Database className="w-4 h-4 mr-2" />
               Physical Inventory
@@ -196,14 +200,23 @@ export default function Dashboard() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="physical" className="space-y-6">
+          <TabsContent value="insights" className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-                Quick Insights
+                Physical Inventory Insights
               </h3>
-              <DashboardStats items={inventoryData?.physicalInventory || []} />
+              <DashboardStats items={inventoryData?.physicalInventory.filter(item => !shippedIMEIs.includes(item.imei || '')) || []} />
             </div>
 
+            <div>
+              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+                Reconciled Inventory Insights
+              </h3>
+              <DashboardStats items={inventoryData?.physicalInventory.filter(item => shippedIMEIs.includes(item.imei || '')) || []} />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="physical" className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
                 Breakdown by Grade
@@ -292,13 +305,6 @@ export default function Dashboard() {
                   Found {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''} matching "{searchIMEI}"
                 </p>
               )}
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-                Quick Insights
-              </h3>
-              <DashboardStats items={currentItems} />
             </div>
 
             <div>
