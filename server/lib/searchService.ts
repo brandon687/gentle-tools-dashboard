@@ -390,8 +390,8 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
       conditions.push(lte(inventoryMovements.performedAt, endDate));
     }
 
-    // Get movements with item and location details
-    const movementsQuery = db
+    // Build query conditionally
+    let movementsQuery = db
       .select({
         movement: inventoryMovements,
         item: inventoryItems,
@@ -407,27 +407,30 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
       .leftJoin(
         toLocationAlias,
         eq(inventoryMovements.toLocationId, toLocationAlias.id)
-      )
+      );
+
+    // Apply conditions if any
+    if (conditions.length > 0) {
+      movementsQuery = movementsQuery.where(and(...conditions)) as any;
+    }
+
+    // Apply ordering and pagination
+    const movements = await movementsQuery
       .orderBy(desc(inventoryMovements.performedAt))
       .limit(limit)
       .offset(offset);
 
-    // Apply conditions if any
-    const movements = conditions.length > 0
-      ? await movementsQuery.where(and(...conditions))
-      : await movementsQuery;
-
     // Get total count for pagination
-    const countQuery = conditions.length > 0
-      ? db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(inventoryMovements)
-          .where(and(...conditions))
-      : db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(inventoryMovements);
+    let countQuery = db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(inventoryMovements);
 
-    const [{ count: totalCount }] = await countQuery;
+    if (conditions.length > 0) {
+      countQuery = countQuery.where(and(...conditions)) as any;
+    }
+
+    const countResult = await countQuery;
+    const totalCount = countResult[0]?.count || 0;
 
     return {
       movements: movements.map(m => ({

@@ -67,11 +67,23 @@ export default function MovementLog() {
   const limit = 50;
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery<MovementsResponse>({
-    queryKey: ['/api/movements', {
-      movementType: movementTypeFilter === "all" ? undefined : movementTypeFilter,
-      limit,
-      offset: currentPage * limit
-    }],
+    queryKey: ['/api/movements', movementTypeFilter, currentPage],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        limit: limit.toString(),
+        offset: (currentPage * limit).toString(),
+      });
+
+      if (movementTypeFilter !== "all") {
+        params.append('movementType', movementTypeFilter);
+      }
+
+      const response = await fetch(`/api/movements?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch movements: ${response.statusText}`);
+      }
+      return response.json();
+    },
     refetchOnWindowFocus: false,
   });
 
