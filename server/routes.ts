@@ -42,9 +42,42 @@ async function ensureTableExists() {
   }
 }
 
+/**
+ * Clean up stale "in_progress" syncs on server startup
+ * Marks syncs older than 1 hour as failed to prevent UI confusion
+ */
+async function cleanupStaleSyncs() {
+  if (useInMemory || !db) return;
+
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+    const result = await db
+      .update(googleSheetsSyncLog)
+      .set({
+        status: 'failed',
+        syncCompletedAt: new Date(),
+        errorMessage: 'Sync was interrupted or timed out (cleaned up on server restart)',
+      })
+      .where(
+        sql`${googleSheetsSyncLog.status} = 'in_progress' AND ${googleSheetsSyncLog.syncStartedAt} < ${oneHourAgo}`
+      )
+      .returning();
+
+    if (result.length > 0) {
+      console.log(`🧹 Cleaned up ${result.length} stale in-progress sync(s)`);
+    }
+  } catch (error) {
+    console.warn('⚠️  Failed to clean up stale syncs:', error);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize table on startup
   await ensureTableExists();
+
+  // Clean up stale syncs
+  await cleanupStaleSyncs();
 
   app.get('/api/inventory', async (req, res) => {
     try {

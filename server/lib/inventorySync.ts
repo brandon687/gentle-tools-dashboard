@@ -21,6 +21,18 @@ interface SyncResult {
   syncLogId: string;
 }
 
+interface BatchInsertItem {
+  item: NewInventoryItem;
+  movement: Omit<NewInventoryMovement, 'itemId'>;
+  sheetItem: any;
+}
+
+interface BatchUpdateItem {
+  existingItem: any;
+  sheetItem: any;
+  changes: Change[];
+}
+
 interface Change {
   type: 'grade' | 'lock_status';
   oldValue: string | null;
@@ -81,6 +93,21 @@ async function createSyncLog(): Promise<NewGoogleSheetsSyncLog & { id: string }>
 }
 
 /**
+ * Update sync log progress (incremental updates)
+ */
+async function updateSyncProgress(syncLogId: string, result: Partial<SyncResult>) {
+  await db
+    .update(googleSheetsSyncLog)
+    .set({
+      itemsProcessed: result.itemsProcessed,
+      itemsAdded: result.itemsAdded,
+      itemsUpdated: result.itemsUpdated,
+      itemsUnchanged: result.itemsUnchanged,
+    })
+    .where(eq(googleSheetsSyncLog.id, syncLogId));
+}
+
+/**
  * Complete sync log with results
  */
 async function completeSyncLog(syncLogId: string, result: SyncResult) {
@@ -116,50 +143,32 @@ async function failSyncLog(syncLogId: string, error: any) {
 }
 
 /**
- * Add new item to inventory
+ * Batch insert new items to inventory (optimized for bulk operations)
  */
-async function addNewItemToInventory(
-  sheetItem: any,
-  locationId: string,
-  syncLogId: string
+async function batchInsertNewItems(
+  batchItems: BatchInsertItem[]
 ) {
-  if (!sheetItem.imei) {
-    throw new Error('IMEI is required');
-  }
+  if (batchItems.length === 0) return [];
 
   return await db.transaction(async (tx) => {
-    // Insert into inventory_items
-    const [newItem] = await tx
+    // Batch insert all items
+    const newItems = await tx
       .insert(inventoryItems)
-      .values({
-        imei: sheetItem.imei,
-        model: sheetItem.model || null,
-        gb: sheetItem.gb || null,
-        color: sheetItem.color || null,
-        sku: sheetItem.sku || null,
-        currentGrade: sheetItem.grade || null,
-        currentLockStatus: sheetItem.lockStatus || null,
-        currentLocationId: locationId,
-        currentStatus: 'in_stock',
-        firstSeenAt: new Date(),
-        lastSeenAt: new Date(),
-      })
+      .values(batchItems.map(b => b.item))
       .returning();
 
-    // Create movement record
-    await tx.insert(inventoryMovements).values({
-      itemId: newItem.id,
-      movementType: 'added',
-      toLocationId: locationId,
-      toStatus: 'in_stock',
-      toGrade: sheetItem.grade || null,
-      toLockStatus: sheetItem.lockStatus || null,
-      source: 'google_sheets_sync',
-      performedAt: new Date(),
-      snapshotData: sheetItem,
-    });
+    // Map IMEIs to IDs for movement records
+    const imeiToId = new Map(newItems.map(item => [item.imei, item.id]));
 
-    return newItem;
+    // Create movement records for all items
+    const movements = batchItems.map(b => ({
+      ...b.movement,
+      itemId: imeiToId.get(b.item.imei)!,
+    }));
+
+    await tx.insert(inventoryMovements).values(movements);
+
+    return newItems;
   });
 }
 
@@ -189,66 +198,89 @@ function detectChanges(dbItem: any, sheetItem: any): Change[] {
 }
 
 /**
- * Update item and create movement records
+ * Batch update items and create movement records (optimized for bulk operations)
  */
-async function updateItemAndCreateMovements(
-  existingItem: any,
-  sheetItem: any,
-  changes: Change[],
-  syncLogId: string
+async function batchUpdateItems(
+  batchUpdates: BatchUpdateItem[]
 ) {
-  return await db.transaction(async (tx) => {
-    // Update inventory_items
-    await tx
-      .update(inventoryItems)
-      .set({
-        model: sheetItem.model || existingItem.model,
-        gb: sheetItem.gb || existingItem.gb,
-        color: sheetItem.color || existingItem.color,
-        sku: sheetItem.sku || existingItem.sku,
-        currentGrade: sheetItem.grade || existingItem.currentGrade,
-        currentLockStatus: sheetItem.lockStatus || existingItem.currentLockStatus,
-        lastSeenAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(inventoryItems.id, existingItem.id));
+  if (batchUpdates.length === 0) return;
 
-    // Create movement records for each change
-    for (const change of changes) {
-      if (change.type === 'grade') {
-        await tx.insert(inventoryMovements).values({
-          itemId: existingItem.id,
-          movementType: 'grade_changed',
-          fromGrade: change.oldValue,
-          toGrade: change.newValue,
-          source: 'google_sheets_sync',
-          performedAt: new Date(),
-          snapshotData: sheetItem,
-        });
-      } else if (change.type === 'lock_status') {
-        await tx.insert(inventoryMovements).values({
-          itemId: existingItem.id,
-          movementType: 'status_changed',
-          fromLockStatus: change.oldValue,
-          toLockStatus: change.newValue,
-          source: 'google_sheets_sync',
-          performedAt: new Date(),
-          snapshotData: sheetItem,
-        });
+  return await db.transaction(async (tx) => {
+    const now = new Date();
+
+    // Batch update all items using individual updates in parallel
+    // Note: Drizzle doesn't support bulk updates with different values per row,
+    // so we batch the operations in a transaction
+    const updatePromises = batchUpdates.map(({ existingItem, sheetItem }) =>
+      tx
+        .update(inventoryItems)
+        .set({
+          model: sheetItem.model || existingItem.model,
+          gb: sheetItem.gb || existingItem.gb,
+          color: sheetItem.color || existingItem.color,
+          sku: sheetItem.sku || existingItem.sku,
+          currentGrade: sheetItem.grade || existingItem.currentGrade,
+          currentLockStatus: sheetItem.lockStatus || existingItem.currentLockStatus,
+          lastSeenAt: now,
+          updatedAt: now,
+        })
+        .where(eq(inventoryItems.id, existingItem.id))
+    );
+
+    await Promise.all(updatePromises);
+
+    // Collect all movement records
+    const movements: NewInventoryMovement[] = [];
+    for (const { existingItem, sheetItem, changes } of batchUpdates) {
+      for (const change of changes) {
+        if (change.type === 'grade') {
+          movements.push({
+            itemId: existingItem.id,
+            movementType: 'grade_changed',
+            fromGrade: change.oldValue,
+            toGrade: change.newValue,
+            source: 'google_sheets_sync',
+            performedAt: now,
+            snapshotData: sheetItem,
+          });
+        } else if (change.type === 'lock_status') {
+          movements.push({
+            itemId: existingItem.id,
+            movementType: 'status_changed',
+            fromLockStatus: change.oldValue,
+            toLockStatus: change.newValue,
+            source: 'google_sheets_sync',
+            performedAt: now,
+            snapshotData: sheetItem,
+          });
+        }
       }
+    }
+
+    // Batch insert all movements
+    if (movements.length > 0) {
+      await tx.insert(inventoryMovements).values(movements);
     }
   });
 }
 
 /**
- * Main sync function: Sync Google Sheets data to database
+ * Main sync function: Sync Google Sheets data to database (OPTIMIZED)
  */
 export async function syncGoogleSheetsToDatabase(): Promise<SyncResult> {
   console.log('🔄 Starting Google Sheets to Database sync...');
 
+  const BATCH_SIZE = 500; // Process items in batches of 500
+  const PROGRESS_UPDATE_INTERVAL = 1000; // Update progress every 1000 items
+
   try {
-    // 1. Fetch current data from Google Sheets
-    const sheetsData: InventoryDataResponse = await fetchInventoryData();
+    // 1. Fetch current data from Google Sheets with timeout
+    console.log('📊 Fetching data from Google Sheets...');
+    const fetchPromise = fetchInventoryData();
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Google Sheets fetch timeout after 60 seconds')), 60000)
+    );
+    const sheetsData: InventoryDataResponse = await Promise.race([fetchPromise, timeoutPromise]);
     console.log(`📊 Fetched ${sheetsData.physicalInventory.length} items from Google Sheets`);
 
     // 2. Get default location (create if not exists)
@@ -268,54 +300,119 @@ export async function syncGoogleSheetsToDatabase(): Promise<SyncResult> {
       syncLogId: syncLog.id,
     };
 
-    // 4. Process each item from Google Sheets
-    for (const sheetItem of sheetsData.physicalInventory) {
-      if (!sheetItem.imei || sheetItem.imei.trim() === '') {
-        console.warn('⚠️  Skipping item with missing IMEI');
-        continue;
-      }
+    // 4. Filter out items with missing IMEIs
+    const validItems = sheetsData.physicalInventory.filter(item =>
+      item.imei && item.imei.trim() !== ''
+    );
+    console.log(`📋 Processing ${validItems.length} valid items (${sheetsData.physicalInventory.length - validItems.length} skipped due to missing IMEI)`);
 
-      result.itemsProcessed++;
+    // 5. Batch lookup: Get all existing items in one query
+    console.log('🔍 Looking up existing items in database...');
+    const allImeis = validItems.map(item => item.imei!);
+    const existingItemsArray = await db
+      .select()
+      .from(inventoryItems)
+      .where(sql`${inventoryItems.imei} = ANY(${allImeis})`);
 
-      try {
-        // Check if item exists in database
-        const [existingItem] = await db
-          .select()
-          .from(inventoryItems)
-          .where(eq(inventoryItems.imei, sheetItem.imei))
-          .limit(1);
+    // Create a map for O(1) lookup
+    const existingItemsMap = new Map(
+      existingItemsArray.map(item => [item.imei, item])
+    );
+    console.log(`✓ Found ${existingItemsArray.length} existing items in database`);
+
+    // 6. Process items in batches
+    const totalBatches = Math.ceil(validItems.length / BATCH_SIZE);
+    console.log(`⚙️  Processing ${totalBatches} batches of up to ${BATCH_SIZE} items each...`);
+
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const batchStart = batchIndex * BATCH_SIZE;
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, validItems.length);
+      const batch = validItems.slice(batchStart, batchEnd);
+
+      const newItems: BatchInsertItem[] = [];
+      const updateItems: BatchUpdateItem[] = [];
+      let unchangedCount = 0;
+
+      // Categorize items in this batch
+      for (const sheetItem of batch) {
+        const existingItem = existingItemsMap.get(sheetItem.imei!);
 
         if (!existingItem) {
-          // NEW ITEM - Add to inventory
-          await addNewItemToInventory(sheetItem, mainLocation.id, syncLog.id);
-          result.itemsAdded++;
-          result.movements++;
-          console.log(`✓ Added new item: ${sheetItem.imei} (${sheetItem.model})`);
+          // NEW ITEM
+          newItems.push({
+            item: {
+              imei: sheetItem.imei!,
+              model: sheetItem.model || null,
+              gb: sheetItem.gb || null,
+              color: sheetItem.color || null,
+              sku: sheetItem.sku || null,
+              currentGrade: sheetItem.grade || null,
+              currentLockStatus: sheetItem.lockStatus || null,
+              currentLocationId: mainLocation.id,
+              currentStatus: 'in_stock',
+              firstSeenAt: new Date(),
+              lastSeenAt: new Date(),
+            },
+            movement: {
+              movementType: 'added',
+              toLocationId: mainLocation.id,
+              toStatus: 'in_stock',
+              toGrade: sheetItem.grade || null,
+              toLockStatus: sheetItem.lockStatus || null,
+              source: 'google_sheets_sync',
+              performedAt: new Date(),
+              snapshotData: sheetItem,
+            },
+            sheetItem,
+          });
         } else {
           // EXISTING ITEM - Check for changes
           const changes = detectChanges(existingItem, sheetItem);
 
           if (changes.length > 0) {
-            await updateItemAndCreateMovements(
+            updateItems.push({
               existingItem,
               sheetItem,
               changes,
-              syncLog.id
-            );
-            result.itemsUpdated++;
-            result.movements += changes.length;
-            console.log(`↻ Updated item: ${sheetItem.imei} (${changes.length} changes)`);
+            });
           } else {
-            result.itemsUnchanged++;
+            unchangedCount++;
           }
         }
-      } catch (itemError: any) {
-        console.error(`❌ Error processing item ${sheetItem.imei}:`, itemError.message);
-        // Continue processing other items
+      }
+
+      // Execute batch operations
+      try {
+        if (newItems.length > 0) {
+          await batchInsertNewItems(newItems);
+          result.itemsAdded += newItems.length;
+          result.movements += newItems.length;
+        }
+
+        if (updateItems.length > 0) {
+          await batchUpdateItems(updateItems);
+          result.itemsUpdated += updateItems.length;
+          result.movements += updateItems.reduce((sum, item) => sum + item.changes.length, 0);
+        }
+
+        result.itemsUnchanged += unchangedCount;
+        result.itemsProcessed += batch.length;
+
+        // Update progress in database every N items
+        if (result.itemsProcessed % PROGRESS_UPDATE_INTERVAL === 0 || batchIndex === totalBatches - 1) {
+          await updateSyncProgress(syncLog.id, result);
+        }
+
+        // Log progress
+        const progressPercent = ((batchIndex + 1) / totalBatches * 100).toFixed(1);
+        console.log(`⏳ Progress: ${progressPercent}% (${result.itemsProcessed}/${validItems.length} items) - Batch ${batchIndex + 1}/${totalBatches}: +${newItems.length} added, ~${updateItems.length} updated, =${unchangedCount} unchanged`);
+      } catch (batchError: any) {
+        console.error(`❌ Error processing batch ${batchIndex + 1}:`, batchError.message);
+        // Continue with next batch
       }
     }
 
-    // 5. Mark sync as completed
+    // 7. Mark sync as completed
     await completeSyncLog(syncLog.id, result);
 
     console.log('✅ Sync completed successfully:');
