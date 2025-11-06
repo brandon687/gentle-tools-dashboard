@@ -193,11 +193,11 @@ export default function Dashboard() {
             </TabsTrigger>
             <TabsTrigger value="reconciled" data-testid="tab-reconciled-inventory">
               <Scan className="w-4 h-4 mr-2" />
-              Reconciled Inventory
+              Pending Outbound
             </TabsTrigger>
             <TabsTrigger value="shipped" data-testid="tab-shipped-items">
               <Package className="w-4 h-4 mr-2" />
-              Shipped Items ({shippedIMEIs.length})
+              Dump IMEI ({shippedIMEIs.length})
             </TabsTrigger>
           </TabsList>
 
@@ -218,7 +218,7 @@ export default function Dashboard() {
 
             <div>
               <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-                Reconciled Inventory Insights
+                Pending Outbound Insights
               </h3>
               <DashboardStats items={inventoryData?.physicalInventory.filter(item => shippedIMEIs.includes(item.imei || '')) || []} />
             </div>

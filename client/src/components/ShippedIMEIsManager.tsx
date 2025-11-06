@@ -72,16 +72,16 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
 
     toast({
       title: "IMEIs Added",
-      description: `${lines.length} IMEI(s) added to shipped list`,
+      description: `${lines.length} IMEI(s) added to dump list`,
     });
   };
 
   const handleClearAll = async () => {
-    if (confirm(`Are you sure you want to clear all ${shippedIMEIs.length} shipped IMEIs?`)) {
+    if (confirm(`Are you sure you want to clear all ${shippedIMEIs.length} dump IMEIs?`)) {
       await clearAllMutation.mutateAsync();
       toast({
         title: "Cleared",
-        description: "All shipped IMEIs have been removed",
+        description: "All dump IMEIs have been removed",
       });
     }
   };
@@ -90,7 +90,7 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
     navigator.clipboard.writeText(shippedIMEIs.join('\n'));
     toast({
       title: "Copied",
-      description: "Shipped IMEIs copied to clipboard",
+      description: "Dump IMEIs copied to clipboard",
     });
   };
 
@@ -100,13 +100,13 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `shipped-imeis-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `dump-imeis-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
 
     toast({
       title: "Downloaded",
-      description: "Shipped IMEIs downloaded as CSV",
+      description: "Dump IMEIs downloaded as CSV",
     });
   };
 
@@ -114,7 +114,7 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
     await deleteIMEIMutation.mutateAsync(imei);
     toast({
       title: "Removed",
-      description: `IMEI ${imei} removed from shipped list`,
+      description: `IMEI ${imei} removed from dump list`,
     });
   };
 
@@ -124,7 +124,7 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
-            Add Shipped IMEIs
+            Add Dump IMEIs
           </CardTitle>
           <CardDescription>
             Paste IMEIs (one per line) for items that have been shipped or ordered. These will be excluded from the Physical Inventory count.
@@ -152,9 +152,9 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Shipped IMEIs List</CardTitle>
+              <CardTitle>Dump IMEI List</CardTitle>
               <CardDescription>
-                Total: <Badge variant="secondary">{shippedIMEIs.length}</Badge> IMEIs marked as shipped
+                Total: <Badge variant="secondary">{shippedIMEIs.length}</Badge> IMEIs in dump list
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -192,8 +192,8 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
           {shippedIMEIs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>No shipped IMEIs yet</p>
-              <p className="text-sm">Add IMEIs above to track shipped items</p>
+              <p>No dump IMEIs yet</p>
+              <p className="text-sm">Add IMEIs above to track items</p>
             </div>
           ) : (
             <div className="border rounded-lg max-h-[400px] overflow-y-auto">
