@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { fetchInventoryData } from "./lib/googleSheets";
-import { db, shippedImeis } from "./db";
+import { db, shippedImeis, googleSheetsSyncLog, inventoryItems } from "./db";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { syncGoogleSheetsToDatabase, getLatestSyncStatus } from "./lib/inventorySync";
@@ -202,6 +202,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error in /api/sync/status:', error);
       res.status(500).json({
         error: 'Failed to get sync status',
+        message: error.message
+      });
+    }
+  });
+
+  // Fix stuck sync records - updates frozen "in_progress" syncs
+  app.post('/api/sync/fix-stuck', async (req, res) => {
+    if (useInMemory || !db) {
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Fix functionality requires database connection'
+      });
+    }
+
+    try {
+      console.log('🔧 Fixing stuck sync records...');
+
+      // Find stuck sync records (in_progress for more than 10 minutes)
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const stuckSyncs = await db
+        .select()
+        .from(googleSheetsSyncLog)
+        .where(
+          sql`${googleSheetsSyncLog.status} = 'in_progress' AND ${googleSheetsSyncLog.syncStartedAt} < ${tenMinutesAgo}`
+        );
+
+      if (stuckSyncs.length === 0) {
+        return res.json({
+          success: true,
+          message: 'No stuck syncs found',
+          fixed: 0
+        });
+      }
+
+      console.log(`📊 Found ${stuckSyncs.length} stuck sync(s)`);
+
+      // Get actual item counts from database
+      const [itemCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(inventoryItems);
+
+      const totalItems = Number(itemCount.count);
+      console.log(`📦 Database contains ${totalItems} items`);
+
+      // Update each stuck sync
+      for (const stuckSync of stuckSyncs) {
+        console.log(`🔄 Fixing sync ${stuckSync.id}...`);
+
+        await db
+          .update(googleSheetsSyncLog)
+          .set({
+            status: 'completed',
+            syncCompletedAt: new Date(),
+            itemsProcessed: totalItems,
+            itemsAdded: stuckSync.itemsAdded || 0,
+            itemsUpdated: stuckSync.itemsUpdated || 0,
+            itemsUnchanged: totalItems - (stuckSync.itemsAdded || 0) - (stuckSync.itemsUpdated || 0),
+            sheetsRowCount: totalItems,
+            dbItemCount: totalItems,
+            errorMessage: 'Auto-completed by fix-stuck endpoint after timeout',
+          })
+          .where(eq(googleSheetsSyncLog.id, stuckSync.id));
+
+        console.log(`✓ Fixed sync ${stuckSync.id}`);
+      }
+
+      res.json({
+        success: true,
+        message: `Fixed ${stuckSyncs.length} stuck sync(s)`,
+        fixed: stuckSyncs.length,
+        totalItemsInDatabase: totalItems,
+        fixedSyncs: stuckSyncs.map(s => ({
+          id: s.id,
+          startedAt: s.syncStartedAt,
+          wasProcessed: s.itemsProcessed || 0,
+          nowProcessed: totalItems
+        }))
+      });
+    } catch (error: any) {
+      console.error('Error in /api/sync/fix-stuck:', error);
+      res.status(500).json({
+        error: 'Failed to fix stuck syncs',
         message: error.message
       });
     }
