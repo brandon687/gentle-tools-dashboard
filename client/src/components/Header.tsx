@@ -1,5 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { IMEISearchDialog } from "@/components/IMEISearchDialog";
+import { BulkIMEISearchDialog } from "@/components/BulkIMEISearchDialog";
 
 interface HeaderProps {
   onRefresh: () => void;
@@ -19,15 +21,19 @@ export default function Header({ onRefresh, isRefreshing }: HeaderProps) {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          data-testid="button-refresh"
-        >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <IMEISearchDialog />
+          <BulkIMEISearchDialog />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            data-testid="button-refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
     </header>
   );
