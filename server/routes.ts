@@ -572,6 +572,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug endpoint to check environment variables
+  app.get('/api/debug/env', (req, res) => {
+    const dbUrl = process.env.DATABASE_URL;
+    res.json({
+      hasDatabaseUrl: !!dbUrl,
+      databaseUrlLength: dbUrl?.length || 0,
+      databaseUrlPrefix: dbUrl?.substring(0, 20) || 'not set',
+      useInMemory,
+      dbExists: !!db,
+      nodeEnv: process.env.NODE_ENV,
+    });
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
