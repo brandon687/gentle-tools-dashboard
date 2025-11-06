@@ -12,16 +12,17 @@ import ExportButtons from "@/components/ExportButtons";
 import EmptyFilterState from "@/components/EmptyFilterState";
 import ShippedIMEIsManager from "@/components/ShippedIMEIsManager";
 import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
+import MovementLog from "@/components/MovementLog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Scan, AlertCircle, Database, Package, BarChart3 } from "lucide-react";
+import { Scan, AlertCircle, Database, Package, BarChart3, History } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function Dashboard() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
-  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'reconciled' | 'shipped'>('insights');
+  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'reconciled' | 'shipped' | 'movements'>('insights');
   const [isPending, startTransition] = useTransition();
 
   const [filterGrade, setFilterGrade] = useState("");
@@ -182,7 +183,7 @@ export default function Dashboard() {
         </div>
 
         <Tabs value={activeDataset} onValueChange={(v) => setActiveDataset(v as any)} className="space-y-6">
-          <TabsList className="grid w-full max-w-4xl grid-cols-4">
+          <TabsList className="grid w-full max-w-5xl grid-cols-5">
             <TabsTrigger value="insights" data-testid="tab-quick-insights">
               <BarChart3 className="w-4 h-4 mr-2" />
               Quick Insights
@@ -198,6 +199,10 @@ export default function Dashboard() {
             <TabsTrigger value="shipped" data-testid="tab-shipped-items">
               <Package className="w-4 h-4 mr-2" />
               Dump IMEI ({shippedIMEIs.length})
+            </TabsTrigger>
+            <TabsTrigger value="movements" data-testid="tab-movement-log">
+              <History className="w-4 h-4 mr-2" />
+              Movement Log
             </TabsTrigger>
           </TabsList>
 
@@ -370,6 +375,10 @@ export default function Dashboard() {
               shippedIMEIs={shippedIMEIs}
               onUpdateShippedIMEIs={() => refetchShippedIMEIs()}
             />
+          </TabsContent>
+
+          <TabsContent value="movements" className="space-y-6">
+            <MovementLog />
           </TabsContent>
         </Tabs>
       </main>

@@ -4,7 +4,7 @@ import {
   inventoryMovements,
   inventoryLocations,
 } from "../db/schema";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, gte, lte, sql } from "drizzle-orm";
 
 export interface IMEISearchResult {
   found: boolean;
@@ -341,6 +341,129 @@ export async function getIMEIHistory(imei: string, limit: number = 50) {
     };
   } catch (error) {
     console.error('Error getting IMEI history:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get all movements with optional filtering
+ */
+export interface GetAllMovementsParams {
+  movementType?: string; // Filter by type: 'shipped', 'added', 'transferred', etc.
+  startDate?: Date; // Filter by date range (start)
+  endDate?: Date; // Filter by date range (end)
+  limit?: number; // Max results to return
+  offset?: number; // Pagination offset
+}
+
+export async function getAllMovements(params: GetAllMovementsParams = {}) {
+  const {
+    movementType,
+    startDate,
+    endDate,
+    limit = 100,
+    offset = 0,
+  } = params;
+
+  try {
+    // Build WHERE conditions
+    const conditions: any[] = [];
+
+    if (movementType) {
+      conditions.push(eq(inventoryMovements.movementType, movementType));
+    }
+
+    if (startDate) {
+      conditions.push(gte(inventoryMovements.performedAt, startDate));
+    }
+
+    if (endDate) {
+      conditions.push(lte(inventoryMovements.performedAt, endDate));
+    }
+
+    // Get movements with item and location details
+    const movementsQuery = db
+      .select({
+        movement: inventoryMovements,
+        item: inventoryItems,
+        fromLocation: inventoryLocations,
+        toLocation: inventoryLocations,
+      })
+      .from(inventoryMovements)
+      .leftJoin(inventoryItems, eq(inventoryMovements.itemId, inventoryItems.id))
+      .leftJoin(
+        inventoryLocations,
+        eq(inventoryMovements.fromLocationId, inventoryLocations.id)
+      )
+      .leftJoin(
+        inventoryLocations,
+        eq(inventoryMovements.toLocationId, inventoryLocations.id)
+      )
+      .orderBy(desc(inventoryMovements.performedAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Apply conditions if any
+    const movements = conditions.length > 0
+      ? await movementsQuery.where(and(...conditions))
+      : await movementsQuery;
+
+    // Get total count for pagination
+    const countQuery = conditions.length > 0
+      ? db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(inventoryMovements)
+          .where(and(...conditions))
+      : db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(inventoryMovements);
+
+    const [{ count: totalCount }] = await countQuery;
+
+    return {
+      movements: movements.map(m => ({
+        id: m.movement.id,
+        movementType: m.movement.movementType,
+        imei: m.item?.imei || 'Unknown',
+        model: m.item?.model || null,
+        gb: m.item?.gb || null,
+        color: m.item?.color || null,
+        grade: m.item?.currentGrade || null,
+        fromStatus: m.movement.fromStatus,
+        toStatus: m.movement.toStatus,
+        fromGrade: m.movement.fromGrade,
+        toGrade: m.movement.toGrade,
+        fromLockStatus: m.movement.fromLockStatus,
+        toLockStatus: m.movement.toLockStatus,
+        fromLocation: m.fromLocation
+          ? {
+              id: m.fromLocation.id,
+              name: m.fromLocation.name,
+              code: m.fromLocation.code,
+            }
+          : null,
+        toLocation: m.toLocation
+          ? {
+              id: m.toLocation.id,
+              name: m.toLocation.name,
+              code: m.toLocation.code,
+            }
+          : null,
+        notes: m.movement.notes,
+        source: m.movement.source,
+        performedBy: m.movement.performedBy,
+        performedAt: m.movement.performedAt,
+        snapshotData: m.movement.snapshotData,
+      })),
+      pagination: {
+        total: totalCount,
+        limit,
+        offset,
+        hasMore: offset + limit < totalCount,
+      },
+    };
+  } catch (error) {
+    console.error('Error getting all movements:', error);
     throw error;
   }
 }

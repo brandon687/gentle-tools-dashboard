@@ -1,0 +1,111 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - region "Notifications (F8)":
+      - list [ref=e4]:
+        - status [ref=e5]:
+          - generic [ref=e6]:
+            - generic [ref=e7]: IMEIs Added
+            - generic [ref=e8]: 5 IMEI(s) added to dump list
+          - button [ref=e9] [cursor=pointer]:
+            - img [ref=e10]
+    - generic [ref=e14]:
+      - banner [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e18]:
+            - generic [ref=e20]: GT
+            - heading "GENTLE TOOLS" [level=1] [ref=e21]
+          - generic [ref=e22]:
+            - button "Search IMEI" [ref=e23] [cursor=pointer]:
+              - img
+              - text: Search IMEI
+            - button "Bulk IMEI Search" [ref=e24] [cursor=pointer]:
+              - img
+              - text: Bulk IMEI Search
+            - button [ref=e25] [cursor=pointer]:
+              - img
+      - main [ref=e26]:
+        - generic [ref=e27]:
+          - heading "GENTLE TOOLS" [level=2] [ref=e28]
+          - paragraph [ref=e29]: Real-time data from Google Sheets • Click grade cards to drill down • Double-click quantities for IMEIs
+        - generic [ref=e30]:
+          - tablist [ref=e31]:
+            - tab "Quick Insights" [ref=e32] [cursor=pointer]:
+              - img [ref=e33]
+              - text: Quick Insights
+            - tab "Physical Inventory" [ref=e35] [cursor=pointer]:
+              - img [ref=e36]
+              - text: Physical Inventory
+            - tab "Pending Outbound" [ref=e40] [cursor=pointer]:
+              - img [ref=e41]
+              - text: Pending Outbound
+            - tab "Dump IMEI (5)" [active] [selected] [ref=e46] [cursor=pointer]:
+              - img [ref=e47]
+              - text: Dump IMEI (5)
+          - tabpanel "Dump IMEI (5)" [ref=e51]:
+            - generic [ref=e52]:
+              - generic [ref=e53]:
+                - generic [ref=e54]:
+                  - generic [ref=e55]:
+                    - img [ref=e56]
+                    - text: Add Dump IMEIs
+                  - generic [ref=e60]: Paste IMEIs (one per line) for items that have been shipped or ordered. These will be excluded from the Physical Inventory count.
+                - generic [ref=e61]:
+                  - 'textbox "Paste IMEIs here (one per line) Example: 355555754760571 354155251896506 352803728976318" [ref=e62]':
+                    - /placeholder: "Paste IMEIs here (one per line)\nExample:\n355555754760571\n354155251896506\n352803728976318"
+                  - generic [ref=e63]:
+                    - button "Add IMEIs" [disabled]
+                    - button "Clear Input" [disabled]
+              - generic [ref=e64]:
+                - generic [ref=e66]:
+                  - generic [ref=e67]:
+                    - generic [ref=e68]: Dump IMEI List
+                    - generic [ref=e69]:
+                      - text: "Total:"
+                      - generic [ref=e70]: "5"
+                      - text: IMEIs in dump list
+                  - generic [ref=e71]:
+                    - button "Copy" [ref=e72] [cursor=pointer]:
+                      - img
+                      - text: Copy
+                    - button "Export" [ref=e73] [cursor=pointer]:
+                      - img
+                      - text: Export
+                    - button "Clear All" [ref=e74] [cursor=pointer]:
+                      - img
+                      - text: Clear All
+                - generic [ref=e77]:
+                  - generic [ref=e78]:
+                    - generic [ref=e79]:
+                      - generic [ref=e80]: "#1"
+                      - generic [ref=e81]: "357431262556745"
+                    - button [ref=e82] [cursor=pointer]:
+                      - img
+                  - generic [ref=e83]:
+                    - generic [ref=e84]:
+                      - generic [ref=e85]: "#2"
+                      - generic [ref=e86]: "351687740751267"
+                    - button [ref=e87] [cursor=pointer]:
+                      - img
+                  - generic [ref=e88]:
+                    - generic [ref=e89]:
+                      - generic [ref=e90]: "#3"
+                      - generic [ref=e91]: "358419940393424"
+                    - button [ref=e92] [cursor=pointer]:
+                      - img
+                  - generic [ref=e93]:
+                    - generic [ref=e94]:
+                      - generic [ref=e95]: "#4"
+                      - generic [ref=e96]: "357999604639643"
+                    - button [ref=e97] [cursor=pointer]:
+                      - img
+                  - generic [ref=e98]:
+                    - generic [ref=e99]:
+                      - generic [ref=e100]: "#5"
+                      - generic [ref=e101]: "358419942683061"
+                    - button [ref=e102] [cursor=pointer]:
+                      - img
+  - status [ref=e103]: Notification IMEIs Added5 IMEI(s) added to dump list
+```

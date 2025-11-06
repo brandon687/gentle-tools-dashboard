@@ -6,7 +6,7 @@ import { db, shippedImeis, googleSheetsSyncLog, inventoryItems } from "./db";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { syncGoogleSheetsToDatabase, getLatestSyncStatus } from "./lib/inventorySync";
-import { searchByIMEI, batchSearchIMEIs, getIMEIHistory } from "./lib/searchService";
+import { searchByIMEI, batchSearchIMEIs, getIMEIHistory, getAllMovements } from "./lib/searchService";
 import { shipItems, transferItems, updateItemStatus } from "./lib/movementService";
 import {
   generateDailySnapshot,
@@ -396,6 +396,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error in /api/movements/:imei/history:', error);
       res.status(500).json({
         error: 'Failed to get movement history',
+        message: error.message
+      });
+    }
+  });
+
+  // Get all movements with optional filters
+  app.get('/api/movements', async (req, res) => {
+    if (useInMemory || !db) {
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Movement history requires database connection'
+      });
+    }
+
+    try {
+      const { movementType, startDate, endDate, limit, offset } = req.query;
+
+      const params = {
+        movementType: movementType as string | undefined,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+        limit: limit ? parseInt(limit as string) : undefined,
+        offset: offset ? parseInt(offset as string) : undefined,
+      };
+
+      const result = await getAllMovements(params);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Error in /api/movements:', error);
+      res.status(500).json({
+        error: 'Failed to get movements',
         message: error.message
       });
     }
