@@ -273,8 +273,12 @@ export async function syncGoogleSheetsToDatabase(): Promise<SyncResult> {
   const BATCH_SIZE = 500; // Process items in batches of 500
   const PROGRESS_UPDATE_INTERVAL = 1000; // Update progress every 1000 items
 
+  // 1. Create sync log FIRST (before potentially failing operations)
+  const syncLog = await createSyncLog();
+  console.log(`📝 Created sync log: ${syncLog.id}`);
+
   try {
-    // 1. Fetch current data from Google Sheets with timeout
+    // 2. Fetch current data from Google Sheets with timeout
     console.log('📊 Fetching data from Google Sheets...');
     const fetchPromise = fetchInventoryData();
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -283,13 +287,14 @@ export async function syncGoogleSheetsToDatabase(): Promise<SyncResult> {
     const sheetsData: InventoryDataResponse = await Promise.race([fetchPromise, timeoutPromise]);
     console.log(`📊 Fetched ${sheetsData.physicalInventory.length} items from Google Sheets`);
 
-    // 2. Get default location (create if not exists)
+    // 3. Update sync log with row count
+    await db.update(googleSheetsSyncLog)
+      .set({ sheetsRowCount: sheetsData.physicalInventory.length })
+      .where(eq(googleSheetsSyncLog.id, syncLog.id));
+
+    // 4. Get default location (create if not exists)
     const mainLocation = await getOrCreateMainLocation();
     console.log(`📍 Using location: ${mainLocation.name} (${mainLocation.code})`);
-
-    // 3. Start sync log
-    const syncLog = await createSyncLog();
-    console.log(`📝 Created sync log: ${syncLog.id}`);
 
     const result: SyncResult = {
       itemsProcessed: 0,
@@ -426,14 +431,8 @@ export async function syncGoogleSheetsToDatabase(): Promise<SyncResult> {
   } catch (error: any) {
     console.error('❌ Sync failed:', error);
 
-    // Try to mark sync as failed if we have a sync log
-    try {
-      if ((error as any).syncLogId) {
-        await failSyncLog((error as any).syncLogId, error);
-      }
-    } catch (logError) {
-      console.error('Failed to update sync log:', logError);
-    }
+    // Mark sync log as failed
+    await failSyncLog(syncLog.id, error);
 
     throw error;
   }
