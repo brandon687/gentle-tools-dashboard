@@ -125,14 +125,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         inMemoryShippedIMEIs = [...new Set([...inMemoryShippedIMEIs, ...newImeis])];
         res.json(inMemoryShippedIMEIs);
       } else {
-        // Database storage
+        // Database storage - batch insert with chunking for large datasets
         const values = imeis.map(imei => ({ imei: imei.trim() }));
 
-        // Using a transaction to ensure atomicity
+        // Chunk into batches of 500 to avoid parameter limits
+        const BATCH_SIZE = 500;
+        const chunks = [];
+        for (let i = 0; i < values.length; i += BATCH_SIZE) {
+          chunks.push(values.slice(i, i + BATCH_SIZE));
+        }
+
+        // Insert each chunk in a transaction
         await db.transaction(async (tx) => {
-          for (const value of values) {
+          for (const chunk of chunks) {
             await tx.insert(shippedImeis)
-              .values(value)
+              .values(chunk)
               .onConflictDoNothing(); // Ignore duplicates
           }
         });
