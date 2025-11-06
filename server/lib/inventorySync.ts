@@ -8,7 +8,7 @@ import {
   type NewInventoryMovement,
   type NewGoogleSheetsSyncLog,
 } from "../db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { fetchInventoryData } from "./googleSheets";
 import type { InventoryDataResponse } from "@shared/schema";
 
@@ -324,7 +324,7 @@ export async function syncGoogleSheetsToDatabase(): Promise<SyncResult> {
       const chunkResults = await db
         .select()
         .from(inventoryItems)
-        .where(sql`${inventoryItems.imei} = ANY(${chunk})`);
+        .where(inArray(inventoryItems.imei, chunk));
       existingItemsArray.push(...chunkResults);
       console.log(`  Looked up IMEIs ${i} - ${Math.min(i + LOOKUP_CHUNK_SIZE, allImeis.length)}`);
     }
