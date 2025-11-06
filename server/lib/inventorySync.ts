@@ -311,13 +311,23 @@ export async function syncGoogleSheetsToDatabase(): Promise<SyncResult> {
     );
     console.log(`📋 Processing ${validItems.length} valid items (${sheetsData.physicalInventory.length - validItems.length} skipped due to missing IMEI)`);
 
-    // 5. Batch lookup: Get all existing items in one query
+    // 5. Batch lookup: Get all existing items (chunked to avoid PostgreSQL limit)
     console.log('🔍 Looking up existing items in database...');
     const allImeis = validItems.map(item => item.imei!);
-    const existingItemsArray = await db
-      .select()
-      .from(inventoryItems)
-      .where(sql`${inventoryItems.imei} = ANY(${allImeis})`);
+
+    // PostgreSQL has limit of ~1664 parameters, so chunk the lookup
+    const LOOKUP_CHUNK_SIZE = 1500;
+    const existingItemsArray: any[] = [];
+
+    for (let i = 0; i < allImeis.length; i += LOOKUP_CHUNK_SIZE) {
+      const chunk = allImeis.slice(i, i + LOOKUP_CHUNK_SIZE);
+      const chunkResults = await db
+        .select()
+        .from(inventoryItems)
+        .where(sql`${inventoryItems.imei} = ANY(${chunk})`);
+      existingItemsArray.push(...chunkResults);
+      console.log(`  Looked up IMEIs ${i} - ${Math.min(i + LOOKUP_CHUNK_SIZE, allImeis.length)}`);
+    }
 
     // Create a map for O(1) lookup
     const existingItemsMap = new Map(
