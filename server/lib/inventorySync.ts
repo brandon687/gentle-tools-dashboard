@@ -315,8 +315,8 @@ export async function syncGoogleSheetsToDatabase(): Promise<SyncResult> {
     console.log('🔍 Looking up existing items in database...');
     const allImeis = validItems.map(item => item.imei!);
 
-    // PostgreSQL has limit of ~1664 parameters, so chunk the lookup
-    const LOOKUP_CHUNK_SIZE = 1500;
+    // PostgreSQL has limit of ~1684 parameters for ROW expressions, so chunk the lookup safely
+    const LOOKUP_CHUNK_SIZE = 1000;
     const existingItemsArray: any[] = [];
 
     for (let i = 0; i < allImeis.length; i += LOOKUP_CHUNK_SIZE) {

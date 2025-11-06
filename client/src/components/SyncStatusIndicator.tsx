@@ -129,17 +129,17 @@ export function SyncStatusIndicator() {
               </Badge>
             )}
           </div>
-          {isCompleted && (
+          {(isCompleted || isFailed) && (
             <Button
               size="sm"
-              variant="outline"
+              variant={isFailed ? "default" : "outline"}
               onClick={triggerManualSync}
               disabled={manualSyncRunning}
             >
               <RefreshCw
                 className={`h-4 w-4 mr-2 ${manualSyncRunning ? "animate-spin" : ""}`}
               />
-              Sync Again
+              {isFailed ? "Retry Sync" : "Sync Again"}
             </Button>
           )}
         </CardTitle>
