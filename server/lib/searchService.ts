@@ -5,6 +5,7 @@ import {
   inventoryLocations,
 } from "../db/schema";
 import { eq, desc, and, inArray, gte, lte, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export interface IMEISearchResult {
   found: boolean;
@@ -280,21 +281,25 @@ export async function getIMEIHistory(imei: string, limit: number = 50) {
       };
     }
 
+    // Create aliases for joining the same table twice
+    const fromLocationAlias = alias(inventoryLocations, 'from_location');
+    const toLocationAlias = alias(inventoryLocations, 'to_location');
+
     // Get all movements for this item
     const movements = await db
       .select({
         movement: inventoryMovements,
-        fromLocation: inventoryLocations,
-        toLocation: inventoryLocations,
+        fromLocation: fromLocationAlias,
+        toLocation: toLocationAlias,
       })
       .from(inventoryMovements)
       .leftJoin(
-        inventoryLocations,
-        eq(inventoryMovements.fromLocationId, inventoryLocations.id)
+        fromLocationAlias,
+        eq(inventoryMovements.fromLocationId, fromLocationAlias.id)
       )
       .leftJoin(
-        inventoryLocations,
-        eq(inventoryMovements.toLocationId, inventoryLocations.id)
+        toLocationAlias,
+        eq(inventoryMovements.toLocationId, toLocationAlias.id)
       )
       .where(eq(inventoryMovements.itemId, item.id))
       .orderBy(desc(inventoryMovements.performedAt))
@@ -366,6 +371,10 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
   } = params;
 
   try {
+    // Create aliases for joining the same table twice
+    const fromLocationAlias = alias(inventoryLocations, 'from_location');
+    const toLocationAlias = alias(inventoryLocations, 'to_location');
+
     // Build WHERE conditions
     const conditions: any[] = [];
 
@@ -386,18 +395,18 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
       .select({
         movement: inventoryMovements,
         item: inventoryItems,
-        fromLocation: inventoryLocations,
-        toLocation: inventoryLocations,
+        fromLocation: fromLocationAlias,
+        toLocation: toLocationAlias,
       })
       .from(inventoryMovements)
       .leftJoin(inventoryItems, eq(inventoryMovements.itemId, inventoryItems.id))
       .leftJoin(
-        inventoryLocations,
-        eq(inventoryMovements.fromLocationId, inventoryLocations.id)
+        fromLocationAlias,
+        eq(inventoryMovements.fromLocationId, fromLocationAlias.id)
       )
       .leftJoin(
-        inventoryLocations,
-        eq(inventoryMovements.toLocationId, inventoryLocations.id)
+        toLocationAlias,
+        eq(inventoryMovements.toLocationId, toLocationAlias.id)
       )
       .orderBy(desc(inventoryMovements.performedAt))
       .limit(limit)
