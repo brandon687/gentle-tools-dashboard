@@ -99,12 +99,15 @@ async function fetchOutboundSheetData(sheetName: string, apiKey: string): Promis
   const sheets = google.sheets({ version: 'v4', auth: apiKey });
 
   try {
+    // Limit to first 10000 rows to prevent stack overflow
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:J`,
+      range: `${sheetName}!A1:J10000`,
     });
 
     const rows = response.data.values;
+
+    console.log(`[${sheetName}] Fetched ${rows?.length || 0} total rows from sheet`);
 
     if (!rows || rows.length < 3) {
       console.log(`[${sheetName}] Not enough rows, returning empty`);
@@ -131,20 +134,34 @@ async function fetchOutboundSheetData(sheetName: string, apiKey: string): Promis
       return value ? value.toString().trim() : undefined;
     };
 
-    const outboundItems: OutboundSheetRow[] = dataRows.map((row) => ({
-      imei: getColumnValue(row, 'imei'),
-      model: getColumnValue(row, 'model'),
-      capacity: getColumnValue(row, 'capacity'),
-      color: getColumnValue(row, 'color'),
-      lockStatus: getColumnValue(row, 'lock_status'),
-      graded: getColumnValue(row, 'graded'),
-      price: getColumnValue(row, 'price'),
-      updatedAt: getColumnValue(row, 'updated_at'),
-      invno: getColumnValue(row, 'invno'),
-      invtype: getColumnValue(row, 'invtype'),
-    }));
+    // Process in chunks to avoid stack overflow with large datasets
+    const outboundItems: OutboundSheetRow[] = [];
+    const CHUNK_SIZE = 1000;
 
-    return outboundItems.filter(item => item.imei);
+    for (let i = 0; i < dataRows.length; i += CHUNK_SIZE) {
+      const chunk = dataRows.slice(i, i + CHUNK_SIZE);
+      const processedChunk = chunk.map((row) => ({
+        imei: getColumnValue(row, 'imei'),
+        model: getColumnValue(row, 'model'),
+        capacity: getColumnValue(row, 'capacity'),
+        color: getColumnValue(row, 'color'),
+        lockStatus: getColumnValue(row, 'lock_status'),
+        graded: getColumnValue(row, 'graded'),
+        price: getColumnValue(row, 'price'),
+        updatedAt: getColumnValue(row, 'updated_at'),
+        invno: getColumnValue(row, 'invno'),
+        invtype: getColumnValue(row, 'invtype'),
+      })).filter(item => item.imei);
+
+      outboundItems.push(...processedChunk);
+
+      if (i % 5000 === 0 && i > 0) {
+        console.log(`[${sheetName}] Processed ${i} rows so far...`);
+      }
+    }
+
+    console.log(`[${sheetName}] Final count: ${outboundItems.length} items with valid IMEIs`);
+    return outboundItems;
   } catch (error: any) {
     console.error(`Error fetching ${sheetName} sheet data:`, error);
     throw new Error(`Failed to fetch ${sheetName} data: ${error.message}`);
