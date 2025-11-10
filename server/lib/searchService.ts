@@ -373,6 +373,8 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
   } = params;
 
   try {
+    console.log(`🔍 getAllMovements called with params:`, { movementType, imei, limit, offset });
+
     // Create aliases for joining the same table twice
     const fromLocationAlias = alias(inventoryLocations, 'from_location');
     const toLocationAlias = alias(inventoryLocations, 'to_location');
@@ -382,6 +384,7 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
 
     if (movementType) {
       conditions.push(eq(inventoryMovements.movementType, movementType));
+      console.log(`  ✓ Added movement type filter: ${movementType}`);
     }
 
     if (startDate) {
@@ -394,6 +397,7 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
 
     if (imei) {
       conditions.push(like(inventoryItems.imei, `%${imei}%`));
+      console.log(`  ✓ Added IMEI filter: ${imei}`);
     }
 
     // Build query conditionally
@@ -426,10 +430,14 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
       .limit(limit)
       .offset(offset);
 
-    // Get total count for pagination
+    // Get total count for pagination (need to join with items if filtering by IMEI)
     let countQuery = db
       .select({ count: sql<number>`count(*)::int` })
       .from(inventoryMovements);
+
+    if (imei) {
+      countQuery = countQuery.leftJoin(inventoryItems, eq(inventoryMovements.itemId, inventoryItems.id)) as any;
+    }
 
     if (conditions.length > 0) {
       countQuery = countQuery.where(and(...conditions)) as any;
@@ -437,6 +445,8 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
 
     const countResult = await countQuery;
     const totalCount = countResult[0]?.count || 0;
+
+    console.log(`  📊 Found ${movements.length} movements (total: ${totalCount})`);
 
     return {
       movements: movements.map(m => ({
