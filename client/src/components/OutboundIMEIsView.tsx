@@ -128,9 +128,9 @@ export default function OutboundIMEIsView() {
           <div className="flex items-center justify-center py-12">
             <div className="text-center space-y-4">
               <Database className="w-12 h-12 text-muted-foreground mx-auto animate-pulse" />
-              <p className="text-muted-foreground">Initializing cached search...</p>
+              <p className="text-muted-foreground">Searching...</p>
               <p className="text-xs text-muted-foreground">
-                Database-backed for 50x faster results
+                Database-powered instant results
               </p>
             </div>
           </div>
@@ -252,9 +252,9 @@ export default function OutboundIMEIsView() {
         ) : isLoading ? (
           <div className="text-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Searching cache...</p>
+            <p className="text-muted-foreground">Searching...</p>
             <p className="text-xs text-muted-foreground mt-2">
-              Using database for instant results
+              Database-powered instant results
             </p>
           </div>
         ) : filteredItems.length > 0 ? (
