@@ -112,7 +112,7 @@ export function IMEISearchDialog() {
         <DialogHeader>
           <DialogTitle>IMEI Inventory Search</DialogTitle>
           <DialogDescription>
-            Search for a device by IMEI to check if it's currently in inventory
+            {isSearching ? "Searching database..." : "Search for a device by IMEI to check if it's currently in inventory"}
           </DialogDescription>
         </DialogHeader>
 

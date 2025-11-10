@@ -118,7 +118,7 @@ export function BulkIMEISearchDialog() {
         <DialogHeader>
           <DialogTitle>Bulk IMEI Search</DialogTitle>
           <DialogDescription>
-            Paste multiple IMEIs to check which ones are in inventory
+            {isSearching ? "Searching database..." : "Paste multiple IMEIs to check which ones are in inventory"}
           </DialogDescription>
         </DialogHeader>
 
@@ -127,7 +127,7 @@ export function BulkIMEISearchDialog() {
           {!searchResult && (
             <div className="space-y-4">
               <Textarea
-                placeholder="Paste IMEIs here (one per line, or comma/space separated)&#10;&#10;Example:&#10;357004284796555&#10;355241305967474&#10;353662252510607"
+                placeholder="Paste IMEIs here (one per line)&#10;&#10;Example:&#10;354155255208211&#10;356226676664213&#10;354066787123440&#10;358057915125387&#10;356752985498415"
                 value={imeiText}
                 onChange={(e) => setImeiText(e.target.value)}
                 className="min-h-[300px] font-mono text-sm"
