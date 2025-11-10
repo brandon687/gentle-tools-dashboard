@@ -47,23 +47,34 @@ export async function syncOutboundImeis(): Promise<OutboundSyncResult> {
 
     result.itemsProcessed = outboundItems.length;
 
-    // Get all IMEIs to check
+    // Process in batches to avoid database query limits
+    const BATCH_SIZE = 500; // Process 500 IMEIs at a time
     const imeis = outboundItems.map(item => item.imei!).filter(Boolean);
 
-    // Fetch all existing items from database
-    const existingItems = await db
-      .select()
-      .from(inventoryItems)
-      .where(inArray(inventoryItems.imei, imeis));
+    console.log(`📊 Processing ${imeis.length} IMEIs in batches of ${BATCH_SIZE}...`);
 
-    const existingImeiMap = new Map(existingItems.map(item => [item.imei, item]));
+    for (let i = 0; i < outboundItems.length; i += BATCH_SIZE) {
+      const batch = outboundItems.slice(i, i + BATCH_SIZE);
+      const batchImeis = batch.map(item => item.imei!).filter(Boolean);
 
-    // Process each outbound item
-    const now = new Date();
-    const movementsToCreate: NewInventoryMovement[] = [];
-    const itemsToUpdate: Array<{ id: string; imei: string }> = [];
+      if (batchImeis.length === 0) continue;
 
-    for (const outboundItem of outboundItems) {
+      console.log(`⚙️  Processing batch ${Math.floor(i / BATCH_SIZE) + 1} (${batchImeis.length} items)...`);
+
+      // Fetch existing items for this batch
+      const existingItems = await db
+        .select()
+        .from(inventoryItems)
+        .where(inArray(inventoryItems.imei, batchImeis));
+
+      const existingImeiMap = new Map(existingItems.map(item => [item.imei, item]));
+
+      // Process each outbound item in this batch
+      const now = new Date();
+      const movementsToCreate: NewInventoryMovement[] = [];
+      const itemsToUpdate: Array<{ id: string; imei: string }> = [];
+
+      for (const outboundItem of batch) {
       const imei = outboundItem.imei;
       if (!imei) continue;
 
@@ -111,34 +122,35 @@ export async function syncOutboundImeis(): Promise<OutboundSyncResult> {
         },
       });
 
-      itemsToUpdate.push({
-        id: existingItem.id,
-        imei: existingItem.imei,
-      });
-    }
+        itemsToUpdate.push({
+          id: existingItem.id,
+          imei: existingItem.imei,
+        });
+      }
 
-    // Execute updates in a transaction
-    if (movementsToCreate.length > 0) {
-      await db.transaction(async (tx) => {
-        // Update items status to shipped
-        const updatePromises = itemsToUpdate.map(({ id }) =>
-          tx
-            .update(inventoryItems)
-            .set({
-              currentStatus: 'shipped',
-              updatedAt: now,
-            })
-            .where(eq(inventoryItems.id, id))
-        );
+      // Execute updates in a transaction for this batch
+      if (movementsToCreate.length > 0) {
+        await db.transaction(async (tx) => {
+          // Update items status to shipped
+          const updatePromises = itemsToUpdate.map(({ id }) =>
+            tx
+              .update(inventoryItems)
+              .set({
+                currentStatus: 'shipped',
+                updatedAt: now,
+              })
+              .where(eq(inventoryItems.id, id))
+          );
 
-        await Promise.all(updatePromises);
+          await Promise.all(updatePromises);
 
-        // Insert movement records
-        await tx.insert(inventoryMovements).values(movementsToCreate);
+          // Insert movement records
+          await tx.insert(inventoryMovements).values(movementsToCreate);
 
-        result.itemsShipped = movementsToCreate.length;
-        console.log(`✓ Marked ${result.itemsShipped} items as shipped`);
-      });
+          result.itemsShipped += movementsToCreate.length;
+          console.log(`✓ Batch complete: ${movementsToCreate.length} items marked as shipped`);
+        });
+      }
     }
 
     console.log('📦 Outbound sync completed:', {
