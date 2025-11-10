@@ -6,6 +6,7 @@ import { db, shippedImeis, googleSheetsSyncLog, inventoryItems } from "./db";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { syncGoogleSheetsToDatabase, getLatestSyncStatus } from "./lib/inventorySync";
+import { syncOutboundImeis } from "./lib/outboundSync";
 import { searchByIMEI, batchSearchIMEIs, getIMEIHistory, getAllMovements } from "./lib/searchService";
 import { shipItems, transferItems, updateItemStatus } from "./lib/movementService";
 import {
@@ -324,6 +325,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error in /api/sync/fix-stuck:', error);
       res.status(500).json({
         error: 'Failed to fix stuck syncs',
+        message: error.message
+      });
+    }
+  });
+
+  // Sync outbound IMEIs from Google Sheets
+  app.post('/api/sync/outbound', async (req, res) => {
+    if (useInMemory || !db) {
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Outbound sync functionality requires database connection'
+      });
+    }
+
+    try {
+      console.log('📦 Outbound IMEIs sync triggered');
+      const result = await syncOutboundImeis();
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      console.error('Error in /api/sync/outbound:', error);
+      res.status(500).json({
+        error: 'Outbound sync failed',
         message: error.message
       });
     }

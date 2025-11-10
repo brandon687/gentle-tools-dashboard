@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 const SPREADSHEET_ID = '1CbvbPLJGllfGsb4LWR1RWFktzFGLr8nNanxCz2KrCvw';
 const PHYSICAL_INVENTORY_SHEET = 'PHYSICAL INVENTORY';
 const GRADED_TO_FALLOUT_SHEET = 'GRADED TO FALLOUT';
+const OUTBOUND_IMEIS_SHEET = 'outbound IMEIs';
 
 export interface SheetRow {
   _row?: string;
@@ -18,9 +19,23 @@ export interface SheetRow {
   age?: string;
 }
 
+export interface OutboundSheetRow {
+  imei?: string;
+  model?: string;
+  capacity?: string;
+  color?: string;
+  lockStatus?: string;
+  graded?: string;
+  price?: string;
+  updatedAt?: string;
+  invno?: string;
+  invtype?: string;
+}
+
 export interface InventoryDataResponse {
   physicalInventory: SheetRow[];
   gradedToFallout: SheetRow[];
+  outboundImeis?: OutboundSheetRow[];
 }
 
 async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetRow[]> {
@@ -80,6 +95,62 @@ async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetR
   }
 }
 
+async function fetchOutboundSheetData(sheetName: string, apiKey: string): Promise<OutboundSheetRow[]> {
+  const sheets = google.sheets({ version: 'v4', auth: apiKey });
+
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!A:J`,
+    });
+
+    const rows = response.data.values;
+
+    if (!rows || rows.length < 3) {
+      console.log(`[${sheetName}] Not enough rows, returning empty`);
+      return [];
+    }
+
+    // Row 1 is Coefficient banner, Row 2 (index 1) has headers, data starts from row 3 (index 2)
+    const headers = rows[1];
+    const dataRows = rows.slice(2);
+
+    console.log(`[${sheetName}] Headers:`, headers);
+    console.log(`[${sheetName}] Processing ${dataRows.length} data rows`);
+
+    const headerMap = new Map<string, number>();
+    headers.forEach((header, index) => {
+      const normalizedHeader = header.toString().trim().toLowerCase();
+      headerMap.set(normalizedHeader, index);
+    });
+
+    const getColumnValue = (row: any[], columnName: string): string | undefined => {
+      const index = headerMap.get(columnName);
+      if (index === undefined) return undefined;
+      const value = row[index];
+      return value ? value.toString().trim() : undefined;
+    };
+
+    const outboundItems: OutboundSheetRow[] = dataRows.map((row) => ({
+      imei: getColumnValue(row, 'imei'),
+      model: getColumnValue(row, 'model'),
+      capacity: getColumnValue(row, 'capacity'),
+      color: getColumnValue(row, 'color'),
+      lockStatus: getColumnValue(row, 'lock_status'),
+      graded: getColumnValue(row, 'graded'),
+      price: getColumnValue(row, 'price'),
+      updatedAt: getColumnValue(row, 'updated_at'),
+      invno: getColumnValue(row, 'invno'),
+      invtype: getColumnValue(row, 'invtype'),
+    }));
+
+    return outboundItems.filter(item => item.imei);
+  } catch (error: any) {
+    console.error(`Error fetching ${sheetName} sheet data:`, error);
+    throw new Error(`Failed to fetch ${sheetName} data: ${error.message}`);
+  }
+}
+
 export async function fetchInventoryData(): Promise<InventoryDataResponse> {
   const apiKey = process.env.GOOGLE_API_KEY;
 
@@ -93,4 +164,14 @@ export async function fetchInventoryData(): Promise<InventoryDataResponse> {
     physicalInventory,
     gradedToFallout: [], // Not using this sheet for now
   };
+}
+
+export async function fetchOutboundData(): Promise<OutboundSheetRow[]> {
+  const apiKey = process.env.GOOGLE_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('GOOGLE_API_KEY is not configured');
+  }
+
+  return await fetchOutboundSheetData(OUTBOUND_IMEIS_SHEET, apiKey);
 }

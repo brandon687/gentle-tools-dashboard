@@ -3,8 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { RefreshCw, CheckCircle2, AlertCircle, Clock, TruckIcon } from "lucide-react";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface SyncStatus {
   id: string;
@@ -22,6 +23,8 @@ interface SyncStatus {
 
 export function SyncStatusIndicator() {
   const [manualSyncRunning, setManualSyncRunning] = useState(false);
+  const [outboundSyncRunning, setOutboundSyncRunning] = useState(false);
+  const { toast } = useToast();
 
   const { data: syncStatus, isLoading, refetch } = useQuery<SyncStatus>({
     queryKey: ["/api/sync/status"],
@@ -48,6 +51,36 @@ export function SyncStatusIndicator() {
     }
   };
 
+  const triggerOutboundSync = async () => {
+    setOutboundSyncRunning(true);
+    try {
+      const response = await fetch("/api/sync/outbound", {
+        method: "POST",
+      });
+      const data = await response.json();
+      console.log("Outbound sync result:", data);
+
+      toast({
+        title: "Outbound Sync Complete",
+        description: `${data.itemsShipped} items marked as shipped. ${data.itemsAlreadyShipped} already shipped.`,
+        duration: 5000,
+      });
+
+      setTimeout(() => {
+        setOutboundSyncRunning(false);
+      }, 1000);
+    } catch (error) {
+      console.error("Outbound sync failed:", error);
+      toast({
+        title: "Outbound Sync Failed",
+        description: "Failed to sync outbound IMEIs. Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      });
+      setOutboundSyncRunning(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -64,17 +97,31 @@ export function SyncStatusIndicator() {
         <CardHeader>
           <CardTitle className="text-base flex items-center justify-between">
             <span>Database Sync</span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={triggerManualSync}
-              disabled={manualSyncRunning}
-            >
-              <RefreshCw
-                className={`h-4 w-4 mr-2 ${manualSyncRunning ? "animate-spin" : ""}`}
-              />
-              Run First Sync
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={triggerManualSync}
+                disabled={manualSyncRunning}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 mr-2 ${manualSyncRunning ? "animate-spin" : ""}`}
+                />
+                Run First Sync
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={triggerOutboundSync}
+                disabled={outboundSyncRunning}
+                className="border-blue-200 text-blue-700 hover:bg-blue-50"
+              >
+                <TruckIcon
+                  className={`h-4 w-4 mr-2 ${outboundSyncRunning ? "animate-pulse" : ""}`}
+                />
+                Sync Outbound
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -130,17 +177,31 @@ export function SyncStatusIndicator() {
             )}
           </div>
           {(isCompleted || isFailed) && (
-            <Button
-              size="sm"
-              variant={isFailed ? "default" : "outline"}
-              onClick={triggerManualSync}
-              disabled={manualSyncRunning}
-            >
-              <RefreshCw
-                className={`h-4 w-4 mr-2 ${manualSyncRunning ? "animate-spin" : ""}`}
-              />
-              {isFailed ? "Retry Sync" : "Sync Again"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={isFailed ? "default" : "outline"}
+                onClick={triggerManualSync}
+                disabled={manualSyncRunning}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 mr-2 ${manualSyncRunning ? "animate-spin" : ""}`}
+                />
+                {isFailed ? "Retry Sync" : "Sync Again"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={triggerOutboundSync}
+                disabled={outboundSyncRunning}
+                className="border-blue-200 text-blue-700 hover:bg-blue-50"
+              >
+                <TruckIcon
+                  className={`h-4 w-4 mr-2 ${outboundSyncRunning ? "animate-pulse" : ""}`}
+                />
+                Sync Outbound
+              </Button>
+            </div>
           )}
         </CardTitle>
       </CardHeader>
