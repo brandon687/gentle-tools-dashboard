@@ -12,6 +12,7 @@ import ExportButtons from "@/components/ExportButtons";
 import EmptyFilterState from "@/components/EmptyFilterState";
 import ShippedIMEIsManager from "@/components/ShippedIMEIsManager";
 import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
+import { OutboundSyncCard } from "@/components/OutboundSyncCard";
 import MovementLog from "@/components/MovementLog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -207,11 +208,19 @@ export default function Dashboard() {
           </TabsList>
 
           <TabsContent value="insights" className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-                Database Sync Status
-              </h3>
-              <SyncStatusIndicator />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+                  Database Sync Status
+                </h3>
+                <SyncStatusIndicator />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+                  Outbound Sync Status
+                </h3>
+                <OutboundSyncCard />
+              </div>
             </div>
 
             <div>
