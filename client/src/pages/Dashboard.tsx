@@ -14,6 +14,7 @@ import ShippedIMEIsManager from "@/components/ShippedIMEIsManager";
 import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 import { OutboundSyncCard } from "@/components/OutboundSyncCard";
 import MovementLog from "@/components/MovementLog";
+import OutboundIMEIsView from "@/components/OutboundIMEIsView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Scan, AlertCircle, Database, Package, BarChart3, History } from "lucide-react";
@@ -23,7 +24,7 @@ export default function Dashboard() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
-  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'reconciled' | 'shipped' | 'movements'>('insights');
+  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'reconciled' | 'shipped' | 'outbound' | 'movements'>('insights');
   const [isPending, startTransition] = useTransition();
 
   const [filterGrade, setFilterGrade] = useState("");
@@ -184,7 +185,7 @@ export default function Dashboard() {
         </div>
 
         <Tabs value={activeDataset} onValueChange={(v) => setActiveDataset(v as any)} className="space-y-6">
-          <TabsList className="grid w-full max-w-5xl grid-cols-5">
+          <TabsList className="grid w-full max-w-7xl grid-cols-6">
             <TabsTrigger value="insights" data-testid="tab-quick-insights">
               <BarChart3 className="w-4 h-4 mr-2" />
               Quick Insights
@@ -196,6 +197,10 @@ export default function Dashboard() {
             <TabsTrigger value="reconciled" data-testid="tab-reconciled-inventory">
               <Scan className="w-4 h-4 mr-2" />
               Pending Outbound
+            </TabsTrigger>
+            <TabsTrigger value="outbound" data-testid="tab-outbound-items">
+              <Package className="w-4 h-4 mr-2" />
+              Outbound IMEIs
             </TabsTrigger>
             <TabsTrigger value="shipped" data-testid="tab-shipped-items">
               <Package className="w-4 h-4 mr-2" />
@@ -377,6 +382,10 @@ export default function Dashboard() {
                 />
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="outbound" className="space-y-6">
+            <OutboundIMEIsView />
           </TabsContent>
 
           <TabsContent value="shipped" className="space-y-6">

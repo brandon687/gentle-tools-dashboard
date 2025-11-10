@@ -330,6 +330,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get outbound IMEIs directly from Google Sheets (read-only view)
+  app.get('/api/outbound-imeis', async (req, res) => {
+    try {
+      const { fetchOutboundData } = await import('./lib/googleSheets');
+      console.log('📦 Fetching outbound IMEIs from Google Sheets...');
+      const outboundItems = await fetchOutboundData();
+      res.json({
+        success: true,
+        items: outboundItems,
+        count: outboundItems.length,
+      });
+    } catch (error: any) {
+      console.error('Error fetching outbound IMEIs:', error);
+      res.status(500).json({
+        error: 'Failed to fetch outbound IMEIs',
+        message: error.message
+      });
+    }
+  });
+
   // Sync outbound IMEIs from Google Sheets
   app.post('/api/sync/outbound', async (req, res) => {
     if (useInMemory || !db) {
