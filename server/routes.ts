@@ -330,16 +330,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get outbound IMEIs directly from Google Sheets (read-only view)
+  // Get outbound IMEIs with server-side search and pagination
   app.get('/api/outbound-imeis', async (req, res) => {
     try {
       const { fetchOutboundData } = await import('./lib/googleSheets');
+      const { search, limit = '50', offset = '0' } = req.query;
+
       console.log('📦 Fetching outbound IMEIs from Google Sheets...');
-      const outboundItems = await fetchOutboundData();
+      const allItems = await fetchOutboundData();
+
+      // Server-side filtering
+      let filteredItems = allItems;
+      if (search && typeof search === 'string' && search.trim().length >= 3) {
+        const searchLower = search.toLowerCase().trim();
+        filteredItems = allItems.filter(item =>
+          item.imei?.toLowerCase().includes(searchLower) ||
+          item.model?.toLowerCase().includes(searchLower) ||
+          item.invno?.toLowerCase().includes(searchLower)
+        );
+        console.log(`🔍 Filtered ${filteredItems.length} items matching "${search}"`);
+      }
+
+      // Pagination
+      const limitNum = parseInt(limit as string);
+      const offsetNum = parseInt(offset as string);
+      const paginatedItems = filteredItems.slice(offsetNum, offsetNum + limitNum);
+
       res.json({
         success: true,
-        items: outboundItems,
-        count: outboundItems.length,
+        items: paginatedItems,
+        pagination: {
+          total: filteredItems.length,
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + limitNum < filteredItems.length
+        }
       });
     } catch (error: any) {
       console.error('Error fetching outbound IMEIs:', error);

@@ -28,30 +28,41 @@ interface OutboundItem {
 
 export default function OutboundIMEIsView() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce search to avoid too many API calls
+  useMemo(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
-    queryKey: ['/api/outbound-imeis'],
+    queryKey: ['/api/outbound-imeis', debouncedSearch],
     queryFn: async () => {
-      const response = await fetch('/api/outbound-imeis');
+      // Only fetch if there's a search query (at least 3 chars)
+      if (!debouncedSearch || debouncedSearch.trim().length < 3) {
+        return { items: [], pagination: { total: 0, limit: 50, offset: 0, hasMore: false } };
+      }
+
+      const params = new URLSearchParams({
+        search: debouncedSearch.trim(),
+        limit: '1000', // Get more results for searching
+        offset: '0'
+      });
+
+      const response = await fetch(`/api/outbound-imeis?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Failed to fetch outbound IMEIs');
       }
       return response.json();
     },
+    enabled: debouncedSearch.trim().length >= 3, // Only run query if search is 3+ chars
     refetchOnWindowFocus: false,
   });
 
-  const filteredItems = useMemo(() => {
-    if (!data?.items) return [];
-    if (!searchQuery.trim()) return data.items;
-
-    const query = searchQuery.toLowerCase().trim();
-    return data.items.filter((item: OutboundItem) =>
-      item.imei?.toLowerCase().includes(query) ||
-      item.model?.toLowerCase().includes(query) ||
-      item.invno?.toLowerCase().includes(query)
-    );
-  }, [data?.items, searchQuery]);
+  const filteredItems = data?.items || [];
 
   if (isLoading) {
     return (
@@ -122,50 +133,76 @@ export default function OutboundIMEIsView() {
         </div>
       </CardHeader>
       <CardContent>
-        {filteredItems.length > 0 ? (
-          <div className="rounded-md border">
-            <div className="max-h-[600px] overflow-y-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
-                  <TableRow>
-                    <TableHead className="w-[140px]">IMEI</TableHead>
-                    <TableHead>Model</TableHead>
-                    <TableHead className="w-[80px]">Storage</TableHead>
-                    <TableHead>Color</TableHead>
-                    <TableHead className="w-[90px]">Lock Status</TableHead>
-                    <TableHead className="w-[70px]">Grade</TableHead>
-                    <TableHead className="w-[90px]">Price</TableHead>
-                    <TableHead className="w-[110px]">Invoice</TableHead>
-                    <TableHead className="w-[100px]">Type</TableHead>
-                    <TableHead className="w-[110px]">Updated</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredItems.map((item: OutboundItem, index: number) => (
-                    <TableRow key={`${item.imei}-${index}`}>
-                      <TableCell className="font-mono text-xs">{item.imei}</TableCell>
-                      <TableCell className="text-sm">{item.model}</TableCell>
-                      <TableCell className="text-sm">{item.capacity}</TableCell>
-                      <TableCell className="text-sm">{item.color}</TableCell>
-                      <TableCell className="text-xs">{item.lockStatus}</TableCell>
-                      <TableCell className="text-sm font-medium">{item.graded}</TableCell>
-                      <TableCell className="text-sm">{item.price}</TableCell>
-                      <TableCell className="font-mono text-xs">{item.invno}</TableCell>
-                      <TableCell className="text-xs">{item.invtype}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{item.updatedAt}</TableCell>
+        {searchQuery.trim().length < 3 ? (
+          <div className="text-center py-20">
+            <Search className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Search Outbound IMEIs</h3>
+            <p className="text-muted-foreground">
+              Enter at least 3 characters to search
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Search by IMEI, Model, or Invoice Number
+            </p>
+            <p className="text-xs text-muted-foreground mt-4">
+              💡 Example: "357136795163154" or "iPhone" or "INV-2024"
+            </p>
+          </div>
+        ) : isLoading ? (
+          <div className="text-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Searching outbound sheet...</p>
+          </div>
+        ) : filteredItems.length > 0 ? (
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              Found {data?.pagination?.total || 0} results
+              {data?.pagination?.hasMore && ' (showing first 1,000)'}
+            </div>
+            <div className="rounded-md border">
+              <div className="max-h-[600px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      <TableHead className="w-[140px]">IMEI</TableHead>
+                      <TableHead>Model</TableHead>
+                      <TableHead className="w-[80px]">Storage</TableHead>
+                      <TableHead>Color</TableHead>
+                      <TableHead className="w-[90px]">Lock Status</TableHead>
+                      <TableHead className="w-[70px]">Grade</TableHead>
+                      <TableHead className="w-[90px]">Price</TableHead>
+                      <TableHead className="w-[110px]">Invoice</TableHead>
+                      <TableHead className="w-[100px]">Type</TableHead>
+                      <TableHead className="w-[110px]">Updated</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredItems.map((item: OutboundItem, index: number) => (
+                      <TableRow key={`${item.imei}-${index}`}>
+                        <TableCell className="font-mono text-xs">{item.imei}</TableCell>
+                        <TableCell className="text-sm">{item.model}</TableCell>
+                        <TableCell className="text-sm">{item.capacity}</TableCell>
+                        <TableCell className="text-sm">{item.color}</TableCell>
+                        <TableCell className="text-xs">{item.lockStatus}</TableCell>
+                        <TableCell className="text-sm font-medium">{item.graded}</TableCell>
+                        <TableCell className="text-sm">{item.price}</TableCell>
+                        <TableCell className="font-mono text-xs">{item.invno}</TableCell>
+                        <TableCell className="text-xs">{item.invtype}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{item.updatedAt}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
         ) : (
           <div className="text-center py-12">
             <TruckIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
-              {searchQuery.trim()
-                ? `No outbound items found matching "${searchQuery}"`
-                : 'No outbound items found in the Google Sheet'}
+              No outbound items found matching "{searchQuery}"
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Try a different search term
             </p>
           </div>
         )}
