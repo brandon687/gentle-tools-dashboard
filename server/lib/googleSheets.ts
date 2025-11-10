@@ -99,10 +99,10 @@ async function fetchOutboundSheetData(sheetName: string, apiKey: string): Promis
   const sheets = google.sheets({ version: 'v4', auth: apiKey });
 
   try {
-    // Limit to first 10000 rows to prevent stack overflow
+    // Limit to first 100000 rows to capture last 3 weeks of data
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:J10000`,
+      range: `${sheetName}!A1:J100000`,
     });
 
     const rows = response.data.values;
