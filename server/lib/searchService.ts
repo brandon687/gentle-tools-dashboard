@@ -4,7 +4,7 @@ import {
   inventoryMovements,
   inventoryLocations,
 } from "../db/schema";
-import { eq, desc, and, inArray, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, inArray, gte, lte, sql, like } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export interface IMEISearchResult {
@@ -359,6 +359,7 @@ export interface GetAllMovementsParams {
   endDate?: Date; // Filter by date range (end)
   limit?: number; // Max results to return
   offset?: number; // Pagination offset
+  imei?: string; // Filter by IMEI (partial match)
 }
 
 export async function getAllMovements(params: GetAllMovementsParams = {}) {
@@ -368,6 +369,7 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
     endDate,
     limit = 100,
     offset = 0,
+    imei,
   } = params;
 
   try {
@@ -388,6 +390,10 @@ export async function getAllMovements(params: GetAllMovementsParams = {}) {
 
     if (endDate) {
       conditions.push(lte(inventoryMovements.performedAt, endDate));
+    }
+
+    if (imei) {
+      conditions.push(like(inventoryItems.imei, `%${imei}%`));
     }
 
     // Build query conditionally

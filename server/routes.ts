@@ -444,7 +444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const { movementType, startDate, endDate, limit, offset } = req.query;
+      const { movementType, startDate, endDate, limit, offset, imei } = req.query;
 
       const params = {
         movementType: movementType as string | undefined,
@@ -452,6 +452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate: endDate ? new Date(endDate as string) : undefined,
         limit: limit ? parseInt(limit as string) : undefined,
         offset: offset ? parseInt(offset as string) : undefined,
+        imei: imei as string | undefined,
       };
 
       const result = await getAllMovements(params);

@@ -69,8 +69,19 @@ export default function MovementLog() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const limit = 50;
 
+  // Reset page when search query or filter changes
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(0);
+  };
+
+  const handleFilterChange = (value: string) => {
+    setMovementTypeFilter(value);
+    setCurrentPage(0);
+  };
+
   const { data, isLoading, error, refetch, isRefetching } = useQuery<MovementsResponse>({
-    queryKey: ['/api/movements', movementTypeFilter, currentPage],
+    queryKey: ['/api/movements', movementTypeFilter, currentPage, searchQuery],
     queryFn: async () => {
       const params = new URLSearchParams({
         limit: limit.toString(),
@@ -79,6 +90,10 @@ export default function MovementLog() {
 
       if (movementTypeFilter !== "all") {
         params.append('movementType', movementTypeFilter);
+      }
+
+      if (searchQuery.trim()) {
+        params.append('imei', searchQuery.trim());
       }
 
       const response = await fetch(`/api/movements?${params.toString()}`);
@@ -90,12 +105,8 @@ export default function MovementLog() {
     refetchOnWindowFocus: false,
   });
 
-  // Filter movements by search query (IMEI search)
-  const filteredMovements = data?.movements.filter((movement) => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase().trim();
-    return movement.imei?.toLowerCase().includes(query);
-  }) || [];
+  // Use movements directly from API (server-side filtering)
+  const filteredMovements = data?.movements || [];
 
   const getMovementIcon = (type: string) => {
     switch (type) {
@@ -201,11 +212,11 @@ export default function MovementLog() {
                   type="text"
                   placeholder="Search by IMEI..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-10 w-[200px]"
                 />
               </div>
-              <Select value={movementTypeFilter} onValueChange={setMovementTypeFilter}>
+              <Select value={movementTypeFilter} onValueChange={handleFilterChange}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Filter by type" />
                 </SelectTrigger>
