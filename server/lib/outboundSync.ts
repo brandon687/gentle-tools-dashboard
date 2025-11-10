@@ -31,11 +31,17 @@ export async function syncOutboundImeis(): Promise<OutboundSyncResult> {
 
   try {
     // Fetch outbound data from Google Sheets
+    console.log('📡 Fetching outbound data from Google Sheets...');
     const outboundItems = await fetchOutboundData();
     console.log(`✓ Fetched ${outboundItems.length} outbound items from Google Sheets`);
 
+    if (outboundItems.length > 0) {
+      console.log('📋 First outbound item sample:', JSON.stringify(outboundItems[0], null, 2));
+    }
+
     if (outboundItems.length === 0) {
       console.log('⚠ No outbound items found in sheet');
+      console.log('📊 Sync result (no items):', result);
       return result;
     }
 
@@ -143,9 +149,11 @@ export async function syncOutboundImeis(): Promise<OutboundSyncResult> {
       errors: result.errors.length,
     });
 
+    console.log('📊 Final result object:', JSON.stringify(result, null, 2));
     return result;
   } catch (error: any) {
     console.error('❌ Error syncing outbound IMEIs:', error);
+    console.error('❌ Error details:', error.stack);
     throw new Error(`Failed to sync outbound IMEIs: ${error.message}`);
   }
 }
