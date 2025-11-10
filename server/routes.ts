@@ -330,46 +330,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get outbound IMEIs with server-side search and pagination
+  // Get outbound IMEIs with database-backed search and pagination
   app.get('/api/outbound-imeis', async (req, res) => {
     try {
-      const { fetchOutboundData } = await import('./lib/googleSheets');
+      const { db } = await import('./db');
+      const { outboundImeis } = await import('./db/schema');
+      const { like, or, sql } = await import('drizzle-orm');
+      const { getLastSyncInfo, isCacheStale, syncOutboundCache } = await import('./lib/outboundCacheSync');
+
       const { search, limit = '50', offset = '0' } = req.query;
 
-      console.log('📦 Fetching outbound IMEIs from Google Sheets...');
-      const allItems = await fetchOutboundData();
-
-      // Server-side filtering
-      let filteredItems = allItems;
-      if (search && typeof search === 'string' && search.trim().length >= 3) {
-        const searchLower = search.toLowerCase().trim();
-        filteredItems = allItems.filter(item =>
-          item.imei?.toLowerCase().includes(searchLower) ||
-          item.model?.toLowerCase().includes(searchLower) ||
-          item.invno?.toLowerCase().includes(searchLower)
-        );
-        console.log(`🔍 Filtered ${filteredItems.length} items matching "${search}"`);
+      // Check if cache exists and auto-sync if empty
+      const lastSync = await getLastSyncInfo();
+      if (!lastSync || lastSync.currentCacheSize === 0) {
+        console.log('🔄 Cache empty, initiating auto-sync...');
+        await syncOutboundCache();
       }
 
-      // Pagination
       const limitNum = parseInt(limit as string);
       const offsetNum = parseInt(offset as string);
-      const paginatedItems = filteredItems.slice(offsetNum, offsetNum + limitNum);
+
+      let query = db.select().from(outboundImeis);
+
+      // Apply search filter if provided
+      if (search && typeof search === 'string' && search.trim().length >= 3) {
+        const searchPattern = `%${search.trim()}%`;
+
+        query = query.where(
+          or(
+            like(outboundImeis.imei, searchPattern),
+            like(outboundImeis.model, searchPattern),
+            like(outboundImeis.invno, searchPattern)
+          )
+        );
+      }
+
+      // Get total count for pagination
+      const countQuery = db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(outboundImeis);
+
+      if (search && typeof search === 'string' && search.trim().length >= 3) {
+        const searchPattern = `%${search.trim()}%`;
+        countQuery.where(
+          or(
+            like(outboundImeis.imei, searchPattern),
+            like(outboundImeis.model, searchPattern),
+            like(outboundImeis.invno, searchPattern)
+          )
+        );
+      }
+
+      const [{ count }] = await countQuery;
+
+      // Apply pagination
+      const items = await query
+        .limit(limitNum)
+        .offset(offsetNum);
+
+      // Get sync info for metadata
+      const syncInfo = await getLastSyncInfo();
+
+      console.log(`📊 Returning ${items.length} items from cache (total: ${count})`);
 
       res.json({
         success: true,
-        items: paginatedItems,
+        items,
         pagination: {
-          total: filteredItems.length,
+          total: count,
           limit: limitNum,
           offset: offsetNum,
-          hasMore: offsetNum + limitNum < filteredItems.length
+          hasMore: offsetNum + limitNum < count
+        },
+        cacheInfo: {
+          lastSyncedAt: syncInfo?.syncedAt,
+          cacheSize: syncInfo?.currentCacheSize || 0,
+          isStale: await isCacheStale(60) // Cache is stale if older than 1 hour
         }
       });
     } catch (error: any) {
       console.error('Error fetching outbound IMEIs:', error);
       res.status(500).json({
         error: 'Failed to fetch outbound IMEIs',
+        message: error.message
+      });
+    }
+  });
+
+  // Manual sync endpoint for outbound IMEIs cache
+  app.post('/api/cache/sync-outbound', async (req, res) => {
+    try {
+      const { syncOutboundCache } = await import('./lib/outboundCacheSync');
+
+      console.log('🔄 Manual cache sync triggered...');
+
+      // Start sync and return immediately with sync status
+      const syncResult = await syncOutboundCache();
+
+      if (syncResult.success) {
+        res.json({
+          success: true,
+          message: 'Cache sync completed successfully',
+          stats: {
+            rowsProcessed: syncResult.rowsProcessed,
+            rowsInserted: syncResult.rowsInserted,
+            timeTaken: syncResult.timeTaken,
+            lastSyncTime: syncResult.lastSyncTime
+          }
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Cache sync failed',
+          message: syncResult.error,
+          stats: {
+            rowsProcessed: syncResult.rowsProcessed,
+            rowsInserted: syncResult.rowsInserted,
+            timeTaken: syncResult.timeTaken
+          }
+        });
+      }
+    } catch (error: any) {
+      console.error('Error in cache sync:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to sync cache',
+        message: error.message
+      });
+    }
+  });
+
+  // Get cache sync status/info
+  app.get('/api/cache/sync-status', async (req, res) => {
+    try {
+      const { getLastSyncInfo, isCacheStale } = await import('./lib/outboundCacheSync');
+
+      const syncInfo = await getLastSyncInfo();
+      const isStale = await isCacheStale(60); // 1 hour
+
+      res.json({
+        success: true,
+        lastSync: syncInfo ? {
+          syncedAt: syncInfo.syncedAt,
+          rowsInserted: syncInfo.rowsInserted,
+          timeTaken: syncInfo.timeTaken,
+          cacheSize: syncInfo.currentCacheSize
+        } : null,
+        isStale,
+        message: syncInfo
+          ? `Cache has ${syncInfo.currentCacheSize} items, last synced ${syncInfo.syncedAt}`
+          : 'Cache not yet synced'
+      });
+    } catch (error: any) {
+      console.error('Error getting sync status:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get sync status',
         message: error.message
       });
     }

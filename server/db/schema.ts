@@ -175,6 +175,56 @@ export type GoogleSheetsSyncLog = typeof googleSheetsSyncLog.$inferSelect;
 export type NewGoogleSheetsSyncLog = typeof googleSheetsSyncLog.$inferInsert;
 
 // ============================================================================
+// OUTBOUND IMEIs CACHE
+// ============================================================================
+// Cache table for fast searching of outbound IMEIs from Google Sheets
+export const outboundImeis = pgTable("outbound_imeis", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  imei: text("imei").notNull(),
+  model: text("model"),
+  capacity: text("capacity"),
+  color: text("color"),
+  lockStatus: text("lock_status"),
+  graded: text("graded"),
+  price: text("price"),
+  updatedAt: text("updated_at"),
+  invno: text("invno"),
+  invtype: text("invtype"),
+  syncedAt: timestamp("synced_at").defaultNow().notNull(),
+}, (table) => ({
+  imeiIdx: index("outbound_imeis_imei_idx").on(table.imei),
+  modelIdx: index("outbound_imeis_model_idx").on(table.model),
+  invnoIdx: index("outbound_imeis_invno_idx").on(table.invno),
+  syncedAtIdx: index("outbound_imeis_synced_at_idx").on(table.syncedAt),
+}));
+
+export type OutboundImei = typeof outboundImeis.$inferSelect;
+export type NewOutboundImei = typeof outboundImeis.$inferInsert;
+
+// ============================================================================
+// OUTBOUND SYNC LOG
+// ============================================================================
+// Track outbound IMEIs cache synchronization
+export const outboundSyncLog = pgTable("outbound_sync_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  syncStartedAt: timestamp("sync_started_at").defaultNow().notNull(),
+  syncCompletedAt: timestamp("sync_completed_at"),
+  status: text("status").notNull(), // 'in_progress', 'completed', 'failed'
+  rowsProcessed: integer("rows_processed").default(0),
+  rowsInserted: integer("rows_inserted").default(0),
+  timeTaken: integer("time_taken_ms"), // Duration in milliseconds
+  errorMessage: text("error_message"),
+  errorDetails: jsonb("error_details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  statusIdx: index("outbound_sync_log_status_idx").on(table.status),
+  startedIdx: index("outbound_sync_log_started_idx").on(table.syncStartedAt),
+}));
+
+export type OutboundSyncLog = typeof outboundSyncLog.$inferSelect;
+export type NewOutboundSyncLog = typeof outboundSyncLog.$inferInsert;
+
+// ============================================================================
 // SHIPPED IMEIs (LEGACY - Keep for backward compatibility)
 // ============================================================================
 export const shippedImeis = pgTable("shipped_imeis", {

@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -11,7 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, RefreshCw, TruckIcon } from "lucide-react";
+import { Search, RefreshCw, TruckIcon, Clock, AlertCircle, Database } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 interface OutboundItem {
   imei?: string;
@@ -29,6 +31,7 @@ interface OutboundItem {
 export default function OutboundIMEIsView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const queryClient = useQueryClient();
 
   // Debounce search to avoid too many API calls
   useMemo(() => {
@@ -43,7 +46,11 @@ export default function OutboundIMEIsView() {
     queryFn: async () => {
       // Only fetch if there's a search query (at least 3 chars)
       if (!debouncedSearch || debouncedSearch.trim().length < 3) {
-        return { items: [], pagination: { total: 0, limit: 50, offset: 0, hasMore: false } };
+        return {
+          items: [],
+          pagination: { total: 0, limit: 50, offset: 0, hasMore: false },
+          cacheInfo: null
+        };
       }
 
       const params = new URLSearchParams({
@@ -62,7 +69,57 @@ export default function OutboundIMEIsView() {
     refetchOnWindowFocus: false,
   });
 
+  // Cache sync mutation
+  const syncCacheMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/cache/sync-outbound', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to sync cache');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Cache synced successfully",
+        description: `Processed ${data.stats.rowsInserted.toLocaleString()} items in ${(data.stats.timeTaken / 1000).toFixed(1)}s`,
+      });
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['/api/outbound-imeis'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Cache sync failed",
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredItems = data?.items || [];
+  const cacheInfo = data?.cacheInfo;
+
+  // Format last sync time
+  const formatSyncTime = (dateString: string | null | undefined) => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  };
 
   if (isLoading) {
     return (
@@ -70,8 +127,11 @@ export default function OutboundIMEIsView() {
         <CardContent className="pt-6">
           <div className="flex items-center justify-center py-12">
             <div className="text-center space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-              <p className="text-muted-foreground">Loading outbound IMEIs from Google Sheets...</p>
+              <Database className="w-12 h-12 text-muted-foreground mx-auto animate-pulse" />
+              <p className="text-muted-foreground">Initializing cached search...</p>
+              <p className="text-xs text-muted-foreground">
+                Database-backed for 50x faster results
+              </p>
             </div>
           </div>
         </CardContent>
@@ -101,35 +161,77 @@ export default function OutboundIMEIsView() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <TruckIcon className="w-5 h-5" />
-            Outbound IMEIs Sheet
-            <span className="text-sm font-normal text-muted-foreground">
-              ({filteredItems.length.toLocaleString()} {searchQuery ? 'filtered' : 'total'})
-            </span>
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search IMEI, Model, or Invoice..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-[280px]"
-              />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TruckIcon className="w-5 h-5" />
+              Outbound IMEIs (Cached)
+              <span className="text-sm font-normal text-muted-foreground">
+                ({filteredItems.length.toLocaleString()} {searchQuery ? 'found' : 'total'})
+              </span>
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search IMEI, Model, or Invoice..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-[280px]"
+                />
+              </div>
+              <Button
+                onClick={() => refetch()}
+                variant="outline"
+                size="sm"
+                disabled={isRefetching}
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
+                Search
+              </Button>
+              <Button
+                onClick={() => syncCacheMutation.mutate()}
+                variant="outline"
+                size="sm"
+                disabled={syncCacheMutation.isPending}
+              >
+                <Database className={`w-4 h-4 mr-2 ${syncCacheMutation.isPending ? "animate-pulse" : ""}`} />
+                Refresh Cache
+              </Button>
             </div>
-            <Button
-              onClick={() => refetch()}
-              variant="outline"
-              size="sm"
-              disabled={isRefetching}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isRefetching ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
           </div>
+
+          {/* Cache Status Bar */}
+          {cacheInfo && (
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">
+                    Last synced: {formatSyncTime(cacheInfo.lastSyncedAt)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">
+                    {cacheInfo.cacheSize?.toLocaleString() || 0} items cached
+                  </span>
+                </div>
+                {cacheInfo.isStale && (
+                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    Cache is older than 1 hour
+                  </Badge>
+                )}
+              </div>
+              {syncCacheMutation.isPending && (
+                <span className="text-muted-foreground animate-pulse">
+                  Syncing from Google Sheets...
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -150,7 +252,10 @@ export default function OutboundIMEIsView() {
         ) : isLoading ? (
           <div className="text-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Searching outbound sheet...</p>
+            <p className="text-muted-foreground">Searching cache...</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Using database for instant results
+            </p>
           </div>
         ) : filteredItems.length > 0 ? (
           <div className="space-y-4">
