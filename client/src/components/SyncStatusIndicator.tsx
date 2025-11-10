@@ -60,20 +60,36 @@ export function SyncStatusIndicator() {
       const data = await response.json();
       console.log("Outbound sync result:", data);
 
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Sync failed');
+      }
+
+      // Handle success - data might be nested or at root level
+      const result = data.success ? data : data;
+      const shipped = result.itemsShipped || 0;
+      const alreadyShipped = result.itemsAlreadyShipped || 0;
+      const processed = result.itemsProcessed || 0;
+      const notFound = result.itemsNotFound || 0;
+
+      let description = `${shipped} items marked as shipped.`;
+      if (alreadyShipped > 0) description += ` ${alreadyShipped} already shipped.`;
+      if (notFound > 0) description += ` ${notFound} not found in inventory.`;
+      description += ` (${processed} total processed)`;
+
       toast({
         title: "Outbound Sync Complete",
-        description: `${data.itemsShipped} items marked as shipped. ${data.itemsAlreadyShipped} already shipped.`,
+        description,
         duration: 5000,
       });
 
       setTimeout(() => {
         setOutboundSyncRunning(false);
       }, 1000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Outbound sync failed:", error);
       toast({
         title: "Outbound Sync Failed",
-        description: "Failed to sync outbound IMEIs. Please try again.",
+        description: error.message || "Failed to sync outbound IMEIs. Please try again.",
         variant: "destructive",
         duration: 5000,
       });
