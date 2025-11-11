@@ -41,6 +41,17 @@ interface UserStats {
   powerUsers: number;
 }
 
+interface UserActivityStats {
+  userId: number;
+  userEmail: string;
+  totalImeisDumped: number;
+  totalImeisDeleted: number;
+  totalLogins: number;
+  totalSyncsTriggered: number;
+  firstActivityAt: string | null;
+  lastActivityAt: string | null;
+}
+
 export default function AdminPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -58,6 +69,21 @@ export default function AdminPanel() {
     queryKey: ['/api/users/stats'],
     refetchInterval: 30000,
   });
+
+  // Fetch activity stats for all users
+  const { data: activityStats = [] } = useQuery<UserActivityStats[]>({
+    queryKey: ['/api/activity/stats'],
+    refetchInterval: 30000,
+  });
+
+  // Helper to get activity stats for a specific user
+  const getUserActivity = (userId: number) => {
+    return activityStats.find(stat => stat.userId === userId) || {
+      totalImeisDumped: 0,
+      totalImeisDeleted: 0,
+      totalLogins: 0,
+    };
+  };
 
   // Update user role mutation
   const updateRoleMutation = useMutation({
@@ -281,48 +307,75 @@ export default function AdminPanel() {
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>IMEIs Dumped</TableHead>
+                  <TableHead>IMEIs Deleted</TableHead>
+                  <TableHead>Total Logins</TableHead>
                   <TableHead>Last Login</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.email}</TableCell>
-                    <TableCell>{user.name || '—'}</TableCell>
-                    <TableCell>{getRoleBadge(user.role)}</TableCell>
-                    <TableCell>{getStatusBadge(user.isActive)}</TableCell>
-                    <TableCell>
-                      {user.lastLoginAt
-                        ? format(new Date(user.lastLoginAt), 'MMM d, yyyy h:mm a')
-                        : 'Never'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={user.role}
-                          onValueChange={(value) => handleRoleChange(user.id, value)}
-                        >
-                          <SelectTrigger className="w-[140px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="power_user">Power User</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
+                {users.map((user) => {
+                  const activity = getUserActivity(user.id);
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.email}</TableCell>
+                      <TableCell>{user.name || '—'}</TableCell>
+                      <TableCell>{getRoleBadge(user.role)}</TableCell>
+                      <TableCell>{getStatusBadge(user.isActive)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold text-blue-400">
+                            {activity.totalImeisDumped.toLocaleString()}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold text-orange-400">
+                            {activity.totalImeisDeleted.toLocaleString()}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold text-green-400">
+                            {activity.totalLogins.toLocaleString()}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {user.lastLoginAt
+                          ? format(new Date(user.lastLoginAt), 'MMM d, yyyy h:mm a')
+                          : 'Never'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={user.role}
+                            onValueChange={(value) => handleRoleChange(user.id, value)}
+                          >
+                            <SelectTrigger className="w-[140px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="power_user">Power User</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
 
-                        <Button
-                          variant={user.isActive ? 'destructive' : 'default'}
-                          size="sm"
-                          onClick={() => handleStatusToggle(user)}
-                        >
-                          {user.isActive ? 'Deactivate' : 'Activate'}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          <Button
+                            variant={user.isActive ? 'destructive' : 'default'}
+                            size="sm"
+                            onClick={() => handleStatusToggle(user)}
+                          >
+                            {user.isActive ? 'Deactivate' : 'Activate'}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
