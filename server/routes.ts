@@ -963,13 +963,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Debug endpoint to check environment variables
   app.get('/api/debug/env', (req, res) => {
     const dbUrl = process.env.DATABASE_URL;
+
+    // Show ALL env variables (with sensitive ones redacted)
+    const allEnvVars: Record<string, string> = {};
+    Object.keys(process.env).forEach(key => {
+      const value = process.env[key] || '';
+
+      // Redact sensitive values
+      if (key.includes('SECRET') || key.includes('PASSWORD') || key.includes('KEY') || key.includes('TOKEN') || key === 'DATABASE_URL') {
+        allEnvVars[key] = value ? `[SET - ${value.length} chars]` : '[NOT SET]';
+      } else {
+        // Show first 50 chars of non-sensitive values
+        allEnvVars[key] = value.substring(0, 50) + (value.length > 50 ? '...' : '');
+      }
+    });
+
     res.json({
-      hasDatabaseUrl: !!dbUrl,
-      databaseUrlLength: dbUrl?.length || 0,
-      databaseUrlPrefix: dbUrl?.substring(0, 20) || 'not set',
-      useInMemory,
-      dbExists: !!db,
-      nodeEnv: process.env.NODE_ENV,
+      summary: {
+        hasDatabaseUrl: !!dbUrl,
+        databaseUrlLength: dbUrl?.length || 0,
+        databaseUrlPrefix: dbUrl?.substring(0, 20) || 'not set',
+        useInMemory,
+        dbExists: !!db,
+        nodeEnv: process.env.NODE_ENV,
+      },
+      oauth: {
+        GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '[NOT SET]',
+        GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? `[SET - ${process.env.GOOGLE_CLIENT_SECRET.length} chars]` : '[NOT SET]',
+        GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || '[NOT SET]',
+      },
+      allEnvironmentVariables: allEnvVars,
     });
   });
 
