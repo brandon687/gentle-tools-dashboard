@@ -1,4 +1,28 @@
-import { pgTable, text, timestamp, uuid, boolean, integer, numeric, jsonb, date, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, boolean, integer, numeric, jsonb, date, index, uniqueIndex, serial } from "drizzle-orm/pg-core";
+
+// ============================================================================
+// USERS & AUTHENTICATION
+// ============================================================================
+// User accounts for authentication and authorization
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  googleId: text("google_id").unique(),
+  role: text("role").notNull().default("power_user"), // 'power_user' or 'admin'
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastLoginAt: timestamp("last_login_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  emailIdx: uniqueIndex("idx_users_email").on(table.email),
+  googleIdIdx: uniqueIndex("idx_users_google_id").on(table.googleId),
+  roleIdx: index("idx_users_role").on(table.role),
+  activeIdx: index("idx_users_active").on(table.isActive),
+}));
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
 
 // ============================================================================
 // INVENTORY LOCATIONS

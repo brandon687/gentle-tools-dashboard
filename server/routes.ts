@@ -15,6 +15,9 @@ import {
   getSnapshotsByDateRange,
   getDateRangeSummary,
 } from "./lib/reportGenerator";
+import authRoutes from "./routes/auth";
+import userRoutes from "./routes/users";
+import { requireAuth, requireAdmin } from "./middleware/auth";
 
 // In-memory fallback if database isn't available
 let inMemoryShippedIMEIs: string[] = [];
@@ -80,7 +83,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clean up stale syncs
   await cleanupStaleSyncs();
 
-  app.get('/api/inventory', async (req, res) => {
+  // ============================================================================
+  // AUTHENTICATION & USER MANAGEMENT ROUTES
+  // ============================================================================
+  app.use('/auth', authRoutes);
+  app.use('/api/users', userRoutes);
+
+  // ============================================================================
+  // PROTECTED API ENDPOINTS
+  // ============================================================================
+
+  app.get('/api/inventory', requireAuth, async (req, res) => {
     try {
       const data = await fetchInventoryData();
       res.json(data);
@@ -94,7 +107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all shipped IMEIs
-  app.get('/api/shipped-imeis', async (req, res) => {
+  app.get('/api/shipped-imeis', requireAuth, async (req, res) => {
     try {
       if (useInMemory) {
         res.json(inMemoryShippedIMEIs);
@@ -112,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add shipped IMEIs (bulk)
-  app.post('/api/shipped-imeis', async (req, res) => {
+  app.post('/api/shipped-imeis', requireAuth, async (req, res) => {
     try {
       const { imeis } = req.body;
 
@@ -159,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete all shipped IMEIs
-  app.delete('/api/shipped-imeis', async (req, res) => {
+  app.delete('/api/shipped-imeis', requireAuth, async (req, res) => {
     try {
       if (useInMemory) {
         inMemoryShippedIMEIs = [];
@@ -177,7 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete specific IMEI
-  app.delete('/api/shipped-imeis/:imei', async (req, res) => {
+  app.delete('/api/shipped-imeis/:imei', requireAuth, async (req, res) => {
     try {
       const { imei } = req.params;
       if (useInMemory) {
@@ -204,7 +217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // -----------------------------
 
   // Manually trigger Google Sheets sync
-  app.post('/api/sync/sheets', async (req, res) => {
+  app.post('/api/sync/sheets', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -229,7 +242,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get latest sync status
-  app.get('/api/sync/status', async (req, res) => {
+  app.get('/api/sync/status', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available'
@@ -249,7 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Fix stuck sync records - updates frozen "in_progress" syncs
-  app.post('/api/sync/fix-stuck', async (req, res) => {
+  app.post('/api/sync/fix-stuck', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -331,7 +344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get outbound IMEIs with database-backed search and pagination
-  app.get('/api/outbound-imeis', async (req, res) => {
+  app.get('/api/outbound-imeis', requireAuth, requireAdmin, async (req, res) => {
     try {
       const { db } = await import('./db');
       const { outboundImeis } = await import('./db/schema');
@@ -418,7 +431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Manual sync endpoint for outbound IMEIs cache
-  app.post('/api/cache/sync-outbound', async (req, res) => {
+  app.post('/api/cache/sync-outbound', requireAuth, requireAdmin, async (req, res) => {
     try {
       const { syncOutboundCache } = await import('./lib/outboundCacheSync');
 
@@ -461,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get cache sync status/info
-  app.get('/api/cache/sync-status', async (req, res) => {
+  app.get('/api/cache/sync-status', requireAuth, requireAdmin, async (req, res) => {
     try {
       const { getLastSyncInfo, isCacheStale } = await import('./lib/outboundCacheSync');
 
@@ -492,7 +505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sync outbound IMEIs from Google Sheets
-  app.post('/api/sync/outbound', async (req, res) => {
+  app.post('/api/sync/outbound', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -521,7 +534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // -----------------------------
 
   // Search for single IMEI
-  app.get('/api/search/imei/:imei', async (req, res) => {
+  app.get('/api/search/imei/:imei', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -543,7 +556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Batch search for multiple IMEIs
-  app.post('/api/search/imei/batch', async (req, res) => {
+  app.post('/api/search/imei/batch', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -573,7 +586,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get movement history for an IMEI
-  app.get('/api/movements/:imei/history', async (req, res) => {
+  app.get('/api/movements/:imei/history', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -596,7 +609,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all movements with optional filters
-  app.get('/api/movements', async (req, res) => {
+  app.get('/api/movements', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -632,7 +645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // -----------------------------
 
   // Ship items (creates movement records)
-  app.post('/api/movements/ship', async (req, res) => {
+  app.post('/api/movements/ship', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -662,7 +675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Transfer items between locations
-  app.post('/api/movements/transfer', async (req, res) => {
+  app.post('/api/movements/transfer', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -705,7 +718,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update item status (grade, lock status)
-  app.post('/api/movements/update-status', async (req, res) => {
+  app.post('/api/movements/update-status', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -751,7 +764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // -----------------------------
 
   // Generate daily snapshot (manual trigger)
-  app.post('/api/reports/generate-snapshot', async (req, res) => {
+  app.post('/api/reports/generate-snapshot', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -781,7 +794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get snapshot for specific date
-  app.get('/api/reports/daily/:date', async (req, res) => {
+  app.get('/api/reports/daily/:date', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -813,7 +826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get snapshots for date range
-  app.get('/api/reports/daily/range', async (req, res) => {
+  app.get('/api/reports/daily/range', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',
@@ -852,7 +865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get summary for date range
-  app.get('/api/reports/summary', async (req, res) => {
+  app.get('/api/reports/summary', requireAuth, requireAdmin, async (req, res) => {
     if (useInMemory || !db) {
       return res.status(503).json({
         error: 'Database not available',

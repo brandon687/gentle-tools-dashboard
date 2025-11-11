@@ -15,16 +15,22 @@ import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 import { OutboundSyncCard } from "@/components/OutboundSyncCard";
 import MovementLog from "@/components/MovementLog";
 import OutboundIMEIsView from "@/components/OutboundIMEIsView";
+import AdminPanel from "@/components/AdminPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Scan, AlertCircle, Database, Package, BarChart3, History } from "lucide-react";
+import { Scan, AlertCircle, Database, Package, BarChart3, History, Settings } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useAuth } from "@/contexts/AuthContext";
+import { canAccessTab } from "@/lib/permissions";
 
 export default function Dashboard() {
+  const { user, isAdmin, logout } = useAuth();
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
-  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'reconciled' | 'shipped' | 'outbound' | 'movements'>('insights');
+  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'reconciled' | 'shipped' | 'outbound' | 'movements' | 'admin'>(
+    user?.role === 'admin' ? 'insights' : 'physical'
+  );
   const [isPending, startTransition] = useTransition();
 
   const [filterGrade, setFilterGrade] = useState("");
@@ -186,30 +192,48 @@ export default function Dashboard() {
 
         <Tabs value={activeDataset} onValueChange={(v) => setActiveDataset(v as any)} className="space-y-6">
           <TabsList className="grid w-full max-w-7xl grid-cols-6">
-            <TabsTrigger value="insights" data-testid="tab-quick-insights">
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Quick Insights
-            </TabsTrigger>
-            <TabsTrigger value="physical" data-testid="tab-physical-inventory">
-              <Database className="w-4 h-4 mr-2" />
-              Physical Inventory
-            </TabsTrigger>
-            <TabsTrigger value="reconciled" data-testid="tab-reconciled-inventory">
-              <Scan className="w-4 h-4 mr-2" />
-              Pending Outbound
-            </TabsTrigger>
-            <TabsTrigger value="outbound" data-testid="tab-outbound-items">
-              <Package className="w-4 h-4 mr-2" />
-              Outbound IMEIs
-            </TabsTrigger>
-            <TabsTrigger value="shipped" data-testid="tab-shipped-items">
-              <Package className="w-4 h-4 mr-2" />
-              Dump IMEI ({shippedIMEIs.length})
-            </TabsTrigger>
-            <TabsTrigger value="movements" data-testid="tab-movement-log">
-              <History className="w-4 h-4 mr-2" />
-              Movement Log
-            </TabsTrigger>
+            {canAccessTab(user?.role, 'insights') && (
+              <TabsTrigger value="insights" data-testid="tab-quick-insights" className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Quick Insights
+              </TabsTrigger>
+            )}
+            {canAccessTab(user?.role, 'physical') && (
+              <TabsTrigger value="physical" data-testid="tab-physical-inventory" className="flex items-center gap-2">
+                <Database className="w-4 h-4" />
+                Physical Inventory
+              </TabsTrigger>
+            )}
+            {canAccessTab(user?.role, 'reconciled') && (
+              <TabsTrigger value="reconciled" data-testid="tab-reconciled-inventory" className="flex items-center gap-2">
+                <Scan className="w-4 h-4" />
+                Pending Outbound
+              </TabsTrigger>
+            )}
+            {canAccessTab(user?.role, 'outbound') && (
+              <TabsTrigger value="outbound" data-testid="tab-outbound-items" className="flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                Outbound IMEIs
+              </TabsTrigger>
+            )}
+            {canAccessTab(user?.role, 'shipped') && (
+              <TabsTrigger value="shipped" data-testid="tab-shipped-items" className="flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                Dump IMEI ({shippedIMEIs.length})
+              </TabsTrigger>
+            )}
+            {canAccessTab(user?.role, 'movements') && (
+              <TabsTrigger value="movements" data-testid="tab-movement-log" className="flex items-center gap-2">
+                <History className="w-4 h-4" />
+                Movement Log
+              </TabsTrigger>
+            )}
+            {canAccessTab(user?.role, 'admin') && (
+              <TabsTrigger value="admin" className="flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                Admin Panel
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="insights" className="space-y-6">
@@ -397,6 +421,10 @@ export default function Dashboard() {
 
           <TabsContent value="movements" className="space-y-6">
             <MovementLog />
+          </TabsContent>
+
+          <TabsContent value="admin">
+            <AdminPanel />
           </TabsContent>
         </Tabs>
       </main>
