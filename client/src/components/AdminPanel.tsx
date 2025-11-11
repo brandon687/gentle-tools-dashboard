@@ -29,8 +29,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, UserCheck, UserX, Crown, Loader2, Users } from 'lucide-react';
+import { Shield, UserCheck, UserX, Crown, Loader2, Users, Eye, Calendar, Hash } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface UserStats {
@@ -52,11 +60,27 @@ interface UserActivityStats {
   lastActivityAt: string | null;
 }
 
+interface ActivityLogEntry {
+  id: string;
+  userId: number;
+  userEmail: string;
+  activityType: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  itemCount: number | null;
+  metadata: any;
+  ipAddress: string | null;
+  userAgent: string | null;
+  performedAt: string;
+}
+
 export default function AdminPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [actionType, setActionType] = useState<'role' | 'status' | null>(null);
+  const [activityDialogOpen, setActivityDialogOpen] = useState(false);
+  const [selectedUserForActivity, setSelectedUserForActivity] = useState<User | null>(null);
 
   // Fetch all users
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
@@ -83,6 +107,17 @@ export default function AdminPanel() {
       totalImeisDeleted: 0,
       totalLogins: 0,
     };
+  };
+
+  // Fetch recent activity for selected user
+  const { data: recentActivity = [], isLoading: activityLoading } = useQuery<ActivityLogEntry[]>({
+    queryKey: ['/api/activity/recent', selectedUserForActivity?.id],
+    enabled: !!selectedUserForActivity && activityDialogOpen,
+  });
+
+  const handleViewActivity = (user: User) => {
+    setSelectedUserForActivity(user);
+    setActivityDialogOpen(true);
   };
 
   // Update user role mutation
@@ -324,25 +359,49 @@ export default function AdminPanel() {
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
                       <TableCell>{getStatusBadge(user.isActive)}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold text-blue-400">
-                            {activity.totalImeisDumped.toLocaleString()}
-                          </span>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-1 hover:bg-blue-950/50"
+                          onClick={() => handleViewActivity(user)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-semibold text-blue-400">
+                              {activity.totalImeisDumped.toLocaleString()}
+                            </span>
+                            <Eye className="w-4 h-4 text-blue-400/50" />
+                          </div>
+                        </Button>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold text-orange-400">
-                            {activity.totalImeisDeleted.toLocaleString()}
-                          </span>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-1 hover:bg-orange-950/50"
+                          onClick={() => handleViewActivity(user)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-semibold text-orange-400">
+                              {activity.totalImeisDeleted.toLocaleString()}
+                            </span>
+                            <Eye className="w-4 h-4 text-orange-400/50" />
+                          </div>
+                        </Button>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold text-green-400">
-                            {activity.totalLogins.toLocaleString()}
-                          </span>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto p-1 hover:bg-green-950/50"
+                          onClick={() => handleViewActivity(user)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-semibold text-green-400">
+                              {activity.totalLogins.toLocaleString()}
+                            </span>
+                            <Eye className="w-4 h-4 text-green-400/50" />
+                          </div>
+                        </Button>
                       </TableCell>
                       <TableCell>
                         {user.lastLoginAt
@@ -409,6 +468,122 @@ export default function AdminPanel() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Activity Details Dialog */}
+      <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Activity Details: {selectedUserForActivity?.email}
+            </DialogTitle>
+            <DialogDescription>
+              Recent IMEI operations and activity log
+            </DialogDescription>
+          </DialogHeader>
+
+          {activityLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            </div>
+          ) : (
+            <ScrollArea className="h-[60vh] pr-4">
+              <div className="space-y-4">
+                {recentActivity.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No activity recorded yet
+                  </div>
+                ) : (
+                  recentActivity.map((activity) => (
+                    <Card key={activity.id} className="border-l-4 border-l-blue-500">
+                      <CardContent className="pt-4">
+                        <div className="space-y-3">
+                          {/* Activity Header */}
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant={
+                                  activity.activityType === 'imei_dump_add' ? 'default' :
+                                  activity.activityType === 'imei_dump_delete' ? 'destructive' :
+                                  activity.activityType === 'imei_dump_clear' ? 'secondary' :
+                                  'outline'
+                                }>
+                                  {activity.activityType.replace(/_/g, ' ').toUpperCase()}
+                                </Badge>
+                                {activity.itemCount !== null && (
+                                  <Badge variant="outline" className="flex items-center gap-1">
+                                    <Hash className="w-3 h-3" />
+                                    {activity.itemCount.toLocaleString()} IMEIs
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Calendar className="w-3 h-3" />
+                                {format(new Date(activity.performedAt), 'MMM d, yyyy h:mm:ss a')}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* IMEI List */}
+                          {activity.metadata?.imeis && activity.metadata.imeis.length > 0 && (
+                            <div>
+                              <p className="text-sm font-medium mb-2">IMEIs:</p>
+                              <div className="bg-muted rounded-md p-3 max-h-40 overflow-y-auto">
+                                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                                  {activity.metadata.imeis.slice(0, 100).map((imei: string, idx: number) => (
+                                    <div key={idx} className="text-muted-foreground">
+                                      {imei}
+                                    </div>
+                                  ))}
+                                  {activity.metadata.imeis.length > 100 && (
+                                    <div className="col-span-2 text-center text-muted-foreground italic">
+                                      ... and {activity.metadata.imeis.length - 100} more
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Single IMEI for delete */}
+                          {activity.activityType === 'imei_dump_delete' && activity.metadata?.imei && (
+                            <div>
+                              <p className="text-sm font-medium mb-2">IMEI:</p>
+                              <div className="bg-muted rounded-md p-3">
+                                <code className="text-sm font-mono">{activity.metadata.imei}</code>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* IP Address and User Agent */}
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                            {activity.ipAddress && (
+                              <div>
+                                <p className="text-muted-foreground mb-1">IP Address:</p>
+                                <code className="text-xs bg-muted px-2 py-1 rounded">
+                                  {activity.ipAddress}
+                                </code>
+                              </div>
+                            )}
+                            {activity.userAgent && (
+                              <div>
+                                <p className="text-muted-foreground mb-1">User Agent:</p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {activity.userAgent}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
