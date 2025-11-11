@@ -8,6 +8,9 @@ import crypto from 'crypto';
 
 const app = express();
 
+// Trust Railway proxy for secure cookies
+app.set('trust proxy', 1);
+
 // Log all environment variables (redacted for security)
 console.log('🚀 Starting Gentle Tools Dashboard Server');
 console.log('📦 Environment:', process.env.NODE_ENV || 'development');
@@ -49,9 +52,11 @@ app.use(
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
+    proxy: true, // Trust Railway's proxy
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
+      sameSite: 'lax', // Allow cookies on OAuth redirects
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     },
   })
