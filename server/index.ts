@@ -1,10 +1,12 @@
 import './env'; // Load and validate environment variables first
 import express, { type Request, Response, NextFunction } from "express";
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import passport from './config/passport';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import crypto from 'crypto';
+import { pool } from './db';
 
 const app = express();
 
@@ -47,8 +49,24 @@ if (!sessionSecret) {
   console.warn('⚠️  Please set SESSION_SECRET environment variable for production.');
 }
 
+// Configure PostgreSQL session store for production
+const PgSession = connectPgSimple(session);
+const sessionStore = pool ? new PgSession({
+  pool: pool,
+  tableName: 'session', // PostgreSQL table name
+  createTableIfMissing: true, // Auto-create session table
+  pruneSessionInterval: 60 * 15, // Clean up expired sessions every 15 minutes
+}) : undefined;
+
+if (sessionStore) {
+  console.log('✅ Using PostgreSQL session store for persistent sessions');
+} else {
+  console.warn('⚠️  Using MemoryStore for sessions - sessions will be lost on restart');
+}
+
 app.use(
   session({
+    store: sessionStore,
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
@@ -65,6 +83,19 @@ app.use(
 // Initialize passport
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Session debugging middleware
+app.use((req, res, next) => {
+  // Only log session info for auth-related routes or if authenticated
+  if (req.path.startsWith('/api/auth') || req.isAuthenticated()) {
+    console.log(`🔐 Session Debug [${req.method} ${req.path}]:`);
+    console.log(`   Session ID: ${req.sessionID}`);
+    console.log(`   Authenticated: ${req.isAuthenticated()}`);
+    console.log(`   User: ${req.user?.email || 'None'}`);
+    console.log(`   Cookie: ${req.headers.cookie ? 'Present' : 'Missing'}`);
+  }
+  next();
+});
 
 app.use((req, res, next) => {
   const start = Date.now();

@@ -122,6 +122,7 @@ if (missingVars.length > 0) {
  * Only store user ID in session
  */
 passport.serializeUser((user: any, done) => {
+  console.log('🔒 Serializing user to session:', user.id, user.email);
   done(null, user.id);
 });
 
@@ -130,6 +131,7 @@ passport.serializeUser((user: any, done) => {
  * Retrieve full user object from database
  */
 passport.deserializeUser(async (id: number, done) => {
+  console.log('🔓 Deserializing user from session, ID:', id);
   try {
     const userResults = await db
       .select()
@@ -138,11 +140,14 @@ passport.deserializeUser(async (id: number, done) => {
       .limit(1);
 
     if (userResults.length === 0) {
+      console.error('❌ User not found during deserialization, ID:', id);
       return done(new Error('User not found'), null);
     }
 
+    console.log('✅ User deserialized successfully:', userResults[0].email);
     done(null, userResults[0]);
   } catch (error) {
+    console.error('❌ Error deserializing user:', error);
     done(error, null);
   }
 });

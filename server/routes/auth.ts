@@ -32,9 +32,48 @@ router.get('/google/callback', (req, res, next) => {
     return res.redirect('/login?error=oauth_not_configured');
   }
 
-  passport.authenticate('google', {
-    failureRedirect: '/login?error=auth_failed',
-    successRedirect: '/',
+  console.log('📥 OAuth callback received');
+  console.log('   Session ID before auth:', req.sessionID);
+  console.log('   Session data before auth:', JSON.stringify(req.session));
+  console.log('   Is authenticated before:', req.isAuthenticated());
+
+  passport.authenticate('google', (err: any, user: any, info: any) => {
+    if (err) {
+      console.error('❌ OAuth authentication error:', err);
+      return res.redirect('/login?error=auth_failed');
+    }
+
+    if (!user) {
+      console.error('❌ No user returned from OAuth');
+      console.error('   Info:', info);
+      return res.redirect('/login?error=auth_failed');
+    }
+
+    console.log('✅ OAuth authentication successful for user:', user.email);
+
+    req.logIn(user, (err: any) => {
+      if (err) {
+        console.error('❌ Error during req.logIn:', err);
+        return next(err);
+      }
+
+      console.log('✅ User logged in successfully');
+      console.log('   Session ID after login:', req.sessionID);
+      console.log('   Session data after login:', JSON.stringify(req.session));
+      console.log('   Is authenticated after:', req.isAuthenticated());
+      console.log('   User in session:', req.user?.email);
+
+      // Force session save before redirect
+      req.session.save((err: any) => {
+        if (err) {
+          console.error('❌ Error saving session:', err);
+          return next(err);
+        }
+
+        console.log('✅ Session saved successfully, redirecting to /');
+        res.redirect('/');
+      });
+    });
   })(req, res, next);
 });
 
@@ -43,6 +82,13 @@ router.get('/google/callback', (req, res, next) => {
  * Get current logged-in user info
  */
 router.get('/me', (req, res) => {
+  console.log('🔍 /auth/me endpoint called');
+  console.log('   Session ID:', req.sessionID);
+  console.log('   Session data:', JSON.stringify(req.session));
+  console.log('   Is authenticated:', req.isAuthenticated());
+  console.log('   User:', req.user?.email || 'No user');
+  console.log('   Cookies:', req.headers.cookie);
+
   // If OAuth is disabled, return a mock user for development
   if (!googleOAuthEnabled) {
     return res.json({
@@ -54,6 +100,7 @@ router.get('/me', (req, res) => {
   }
 
   if (!req.isAuthenticated() || !req.user) {
+    console.log('❌ User not authenticated in /auth/me');
     return res.json({
       authenticated: false,
       user: null,
@@ -62,6 +109,8 @@ router.get('/me', (req, res) => {
   }
 
   const { id, email, name, role, isActive, createdAt, lastLoginAt } = req.user;
+
+  console.log('✅ User authenticated in /auth/me:', email);
 
   res.json({
     authenticated: true,
