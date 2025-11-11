@@ -996,6 +996,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // TEMPORARY: Session diagnostic endpoint to test cookie/session behavior
+  app.get('/api/debug/session-test', (req, res) => {
+    console.log('🧪 Session test endpoint called');
+    console.log('   Session ID:', req.sessionID);
+    console.log('   Session data:', JSON.stringify(req.session));
+    console.log('   Cookie header:', req.headers.cookie);
+    console.log('   Is authenticated:', req.isAuthenticated ? req.isAuthenticated() : 'N/A');
+
+    // Increment test counter in session
+    if (!req.session.testCounter) {
+      req.session.testCounter = 0;
+    }
+    req.session.testCounter++;
+
+    // Force session save
+    req.session.save((err) => {
+      if (err) {
+        console.error('❌ Error saving session in test:', err);
+        return res.status(500).json({ error: 'Session save failed', details: err.message });
+      }
+
+      console.log('✅ Session saved with counter:', req.session.testCounter);
+
+      res.json({
+        sessionID: req.sessionID,
+        testCounter: req.session.testCounter,
+        cookieReceived: !!req.headers.cookie,
+        cookieValue: req.headers.cookie?.substring(0, 50) + '...',
+        message: 'Visit this endpoint multiple times. Counter should increment if sessions work.',
+      });
+    });
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
