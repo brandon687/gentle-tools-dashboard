@@ -1,14 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TruckIcon, RefreshCw, Loader2, HelpCircle } from "lucide-react";
+import { TruckIcon, RefreshCw, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 
 const STORAGE_KEY = "outboundSyncLastResult";
 
@@ -119,24 +114,6 @@ export function OutboundSyncCard() {
           <div className="flex items-center gap-2">
             <TruckIcon className="w-4 h-4" />
             <span>Outbound Sync Status</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="text-muted-foreground hover:text-foreground transition-colors">
-                  <HelpCircle className="w-4 h-4" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="start">
-                <div className="space-y-2">
-                  <p className="font-semibold text-sm">Metric Definitions:</p>
-                  <div className="space-y-1 text-xs">
-                    <p><span className="font-medium text-green-600">Shipped:</span> IMEIs newly marked as shipped this sync</p>
-                    <p><span className="font-medium text-blue-600">Already Shipped:</span> IMEIs that were shipped in previous syncs</p>
-                    <p><span className="font-medium text-orange-600">Not Found:</span> IMEIs in the sheet but missing from your database</p>
-                    <p><span className="font-medium">Total Processed:</span> All IMEIs checked from the outbound sheet</p>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
             {outboundSyncRunning && (
               <Badge variant="secondary" className="animate-pulse">
                 <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -181,35 +158,6 @@ export function OutboundSyncCard() {
                   </p>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {lastSyncResult && !outboundSyncRunning && lastSyncResult.success && (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Items Shipped</p>
-              <p className="text-2xl font-bold text-green-600">
-                {lastSyncResult.shipped.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Already Shipped</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {lastSyncResult.alreadyShipped.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Not Found</p>
-              <p className="text-2xl font-bold text-orange-600">
-                {lastSyncResult.notFound.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Processed</p>
-              <p className="text-2xl font-bold">
-                {lastSyncResult.processed.toLocaleString()}
-              </p>
             </div>
           </div>
         )}
