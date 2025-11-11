@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, UserCheck, UserX, Crown, Loader2, Users, Eye, Calendar, Hash } from 'lucide-react';
+import { Shield, UserCheck, UserX, Crown, Loader2, Users, Eye, Calendar, Hash, Copy, Check } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface UserStats {
@@ -81,6 +81,7 @@ export default function AdminPanel() {
   const [actionType, setActionType] = useState<'role' | 'status' | null>(null);
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [selectedUserForActivity, setSelectedUserForActivity] = useState<User | null>(null);
+  const [copiedActivityId, setCopiedActivityId] = useState<string | null>(null);
 
   // Fetch all users
   const { data: users = [], isLoading: usersLoading } = useQuery<User[]>({
@@ -118,6 +119,30 @@ export default function AdminPanel() {
   const handleViewActivity = (user: User) => {
     setSelectedUserForActivity(user);
     setActivityDialogOpen(true);
+  };
+
+  const handleCopyImeis = async (imeis: string[], activityId: string) => {
+    try {
+      const imeiText = imeis.join('\n');
+      await navigator.clipboard.writeText(imeiText);
+      setCopiedActivityId(activityId);
+      toast({
+        title: 'Copied!',
+        description: `${imeis.length} IMEIs copied to clipboard`,
+        duration: 2000,
+      });
+
+      // Reset copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedActivityId(null);
+      }, 2000);
+    } catch (error) {
+      toast({
+        title: 'Copy Failed',
+        description: 'Failed to copy IMEIs to clipboard',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Update user role mutation
@@ -527,7 +552,27 @@ export default function AdminPanel() {
                           {/* IMEI List */}
                           {activity.metadata?.imeis && activity.metadata.imeis.length > 0 && (
                             <div>
-                              <p className="text-sm font-medium mb-2">IMEIs:</p>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-sm font-medium">IMEIs:</p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCopyImeis(activity.metadata.imeis, activity.id)}
+                                  className="h-7 text-xs"
+                                >
+                                  {copiedActivityId === activity.id ? (
+                                    <>
+                                      <Check className="w-3 h-3 mr-1" />
+                                      Copied!
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3 mr-1" />
+                                      Copy All ({activity.metadata.imeis.length})
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
                               <div className="bg-muted rounded-md p-3 max-h-40 overflow-y-auto">
                                 <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                                   {activity.metadata.imeis.slice(0, 100).map((imei: string, idx: number) => (
