@@ -10,13 +10,20 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Try to load .env file if it exists (for local development)
-const envPath = path.resolve(__dirname, '..', '.env');
-const result = dotenv.config({ path: envPath });
+// Only try to load .env file in development
+// In production (Railway), environment variables are injected directly
+if (process.env.NODE_ENV !== 'production') {
+  const envPath = path.resolve(__dirname, '..', '.env');
+  const result = dotenv.config({ path: envPath });
 
-if (result.error && process.env.NODE_ENV === 'development') {
-  console.warn('⚠️  No .env file found at:', envPath);
-  console.warn('⚠️  Using environment variables from system');
+  if (result.error) {
+    console.warn('⚠️  No .env file found at:', envPath);
+    console.warn('⚠️  Using environment variables from system');
+  } else {
+    console.log('✅ Loaded .env file from:', envPath);
+  }
+} else {
+  console.log('🚀 Production mode: Using Railway injected environment variables');
 }
 
 // Log environment loading status
