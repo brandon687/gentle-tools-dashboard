@@ -18,6 +18,15 @@ import {
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/users";
 import { requireAuth, requireAdmin } from "./middleware/auth";
+import {
+  logImeiDumpAdd,
+  logImeiDumpDelete,
+  logImeiDumpClear,
+  getUserActivityStats,
+  getAllUserActivityStats,
+  getUserRecentActivity,
+  getActivityStatsForDateRange,
+} from "./lib/activityTracker";
 
 // In-memory fallback if database isn't available
 let inMemoryShippedIMEIs: string[] = [];
@@ -171,10 +180,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // In-memory storage
         const newImeis = imeis.map(i => i.trim());
         inMemoryShippedIMEIs = [...new Set([...inMemoryShippedIMEIs, ...newImeis])];
+
+        // Log activity
+        if (req.user) {
+          await logImeiDumpAdd(req.user.id, req.user.email, newImeis, req);
+        }
+
         res.json(inMemoryShippedIMEIs);
       } else {
         // Database storage - batch insert with chunking for large datasets
-        const values = imeis.map(imei => ({ imei: imei.trim() }));
+        const cleanedImeis = imeis.map(imei => imei.trim());
+        const values = cleanedImeis.map(imei => ({ imei }));
 
         // Chunk into batches of 500 to avoid parameter limits
         const BATCH_SIZE = 500;
@@ -192,6 +208,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
 
+        // Log activity (after successful insertion)
+        if (req.user) {
+          await logImeiDumpAdd(req.user.id, req.user.email, cleanedImeis, req);
+        }
+
         // Return updated list
         const allImeis = await db.select().from(shippedImeis);
         res.json(allImeis.map(row => row.imei));
@@ -208,11 +229,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete all shipped IMEIs
   app.delete('/api/shipped-imeis', requireAuth, async (req, res) => {
     try {
+      let count = 0;
+
       if (useInMemory) {
+        count = inMemoryShippedIMEIs.length;
         inMemoryShippedIMEIs = [];
       } else {
+        // Get count before deletion
+        const items = await db.select().from(shippedImeis);
+        count = items.length;
         await db.delete(shippedImeis);
       }
+
+      // Log activity (after successful deletion)
+      if (req.user) {
+        await logImeiDumpClear(req.user.id, req.user.email, count, req);
+      }
+
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error in /api/shipped-imeis DELETE:', error);
@@ -232,6 +265,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         await db.delete(shippedImeis).where(eq(shippedImeis.imei, imei));
       }
+
+      // Log activity (after successful deletion)
+      if (req.user) {
+        await logImeiDumpDelete(req.user.id, req.user.email, imei, req);
+      }
+
       res.json({ success: true });
     } catch (error: any) {
       console.error('Error in /api/shipped-imeis/:imei DELETE:', error);
@@ -928,6 +967,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error in /api/reports/summary:', error);
       res.status(500).json({
         error: 'Failed to get summary',
+        message: error.message
+      });
+    }
+  });
+
+  // -----------------------------
+  // USER ACTIVITY ANALYTICS
+  // -----------------------------
+
+  // Get all user activity stats (admin only) - Leaderboard view
+  app.get('/api/activity/stats', requireAuth, requireAdmin, async (req, res) => {
+    if (useInMemory || !db) {
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Activity tracking requires database connection'
+      });
+    }
+
+    try {
+      const stats = await getAllUserActivityStats();
+      res.json(stats);
+    } catch (error: any) {
+      console.error('Error in /api/activity/stats:', error);
+      res.status(500).json({
+        error: 'Failed to get activity stats',
+        message: error.message
+      });
+    }
+  });
+
+  // Get specific user activity stats
+  app.get('/api/activity/stats/:userId', requireAuth, async (req, res) => {
+    if (useInMemory || !db) {
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Activity tracking requires database connection'
+      });
+    }
+
+    try {
+      const userId = parseInt(req.params.userId, 10);
+
+      // Only admins can view other users' stats
+      if (req.user?.id !== userId && req.user?.role !== 'admin') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You can only view your own stats'
+        });
+      }
+
+      const stats = await getUserActivityStats(userId);
+
+      if (!stats) {
+        return res.status(404).json({
+          error: 'Not found',
+          message: 'No activity stats found for this user'
+        });
+      }
+
+      res.json(stats);
+    } catch (error: any) {
+      console.error('Error in /api/activity/stats/:userId:', error);
+      res.status(500).json({
+        error: 'Failed to get user stats',
+        message: error.message
+      });
+    }
+  });
+
+  // Get recent activity for a user
+  app.get('/api/activity/recent/:userId', requireAuth, async (req, res) => {
+    if (useInMemory || !db) {
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Activity tracking requires database connection'
+      });
+    }
+
+    try {
+      const userId = parseInt(req.params.userId, 10);
+      const limit = parseInt(req.query.limit as string || '50', 10);
+
+      // Only admins can view other users' activity
+      if (req.user?.id !== userId && req.user?.role !== 'admin') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You can only view your own activity'
+        });
+      }
+
+      const activities = await getUserRecentActivity(userId, limit);
+      res.json(activities);
+    } catch (error: any) {
+      console.error('Error in /api/activity/recent/:userId:', error);
+      res.status(500).json({
+        error: 'Failed to get user activity',
+        message: error.message
+      });
+    }
+  });
+
+  // Get activity stats for date range
+  app.get('/api/activity/stats/:userId/range', requireAuth, async (req, res) => {
+    if (useInMemory || !db) {
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Activity tracking requires database connection'
+      });
+    }
+
+    try {
+      const userId = parseInt(req.params.userId, 10);
+      const { startDate, endDate } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          error: 'Invalid request',
+          message: 'startDate and endDate query parameters are required'
+        });
+      }
+
+      // Only admins can view other users' activity
+      if (req.user?.id !== userId && req.user?.role !== 'admin') {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'You can only view your own activity'
+        });
+      }
+
+      const stats = await getActivityStatsForDateRange(
+        userId,
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+
+      res.json(stats);
+    } catch (error: any) {
+      console.error('Error in /api/activity/stats/:userId/range:', error);
+      res.status(500).json({
+        error: 'Failed to get activity stats for date range',
+        message: error.message
+      });
+    }
+  });
+
+  // Get current user's own stats (convenience endpoint)
+  app.get('/api/activity/me', requireAuth, async (req, res) => {
+    if (useInMemory || !db) {
+      return res.status(503).json({
+        error: 'Database not available',
+        message: 'Activity tracking requires database connection'
+      });
+    }
+
+    try {
+      const userId = req.user!.id;
+      const stats = await getUserActivityStats(userId);
+
+      res.json(stats || {
+        userId,
+        userEmail: req.user!.email,
+        totalImeisDumped: 0,
+        totalImeisDeleted: 0,
+        totalLogins: 0,
+        totalSyncsTriggered: 0,
+      });
+    } catch (error: any) {
+      console.error('Error in /api/activity/me:', error);
+      res.status(500).json({
+        error: 'Failed to get your activity stats',
         message: error.message
       });
     }

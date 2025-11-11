@@ -249,6 +249,82 @@ export type OutboundSyncLog = typeof outboundSyncLog.$inferSelect;
 export type NewOutboundSyncLog = typeof outboundSyncLog.$inferInsert;
 
 // ============================================================================
+// USER ACTIVITY LOG
+// ============================================================================
+// Track all user actions for analytics and audit trail
+export const userActivityLog = pgTable("user_activity_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userEmail: text("user_email").notNull(), // Denormalized for easier queries
+
+  // Activity details
+  activityType: text("activity_type").notNull(),
+    // 'imei_dump_add', 'imei_dump_delete', 'imei_dump_clear',
+    // 'login', 'logout', 'role_changed', 'sync_triggered', etc.
+
+  // Action metadata
+  resourceType: text("resource_type"), // 'imei', 'user', 'sync', 'report'
+  resourceId: text("resource_id"), // ID of the resource acted upon
+
+  // Quantitative data
+  itemCount: integer("item_count"), // Number of items affected (e.g., # of IMEIs dumped)
+
+  // Context
+  metadata: jsonb("metadata"), // Additional context (e.g., IMEI list, old/new values)
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+
+  // Timestamps
+  performedAt: timestamp("performed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("idx_activity_user").on(table.userId, table.performedAt),
+  typeIdx: index("idx_activity_type").on(table.activityType),
+  emailIdx: index("idx_activity_email").on(table.userEmail),
+  dateIdx: index("idx_activity_date").on(table.performedAt),
+  resourceIdx: index("idx_activity_resource").on(table.resourceType, table.resourceId),
+}));
+
+export type UserActivityLog = typeof userActivityLog.$inferSelect;
+export type NewUserActivityLog = typeof userActivityLog.$inferInsert;
+
+// ============================================================================
+// USER ACTIVITY STATS (Aggregated View)
+// ============================================================================
+// Pre-aggregated statistics for fast dashboard queries
+export const userActivityStats = pgTable("user_activity_stats", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userEmail: text("user_email").notNull(),
+
+  // All-time statistics
+  totalImeisDumped: integer("total_imeis_dumped").default(0).notNull(),
+  totalImeisDeleted: integer("total_imeis_deleted").default(0).notNull(),
+  totalLogins: integer("total_logins").default(0).notNull(),
+  totalSyncsTriggered: integer("total_syncs_triggered").default(0).notNull(),
+
+  // Daily/Weekly/Monthly breakdowns (stored as JSON for flexibility)
+  dailyBreakdown: jsonb("daily_breakdown"), // Last 30 days
+  weeklyBreakdown: jsonb("weekly_breakdown"), // Last 12 weeks
+  monthlyBreakdown: jsonb("monthly_breakdown"), // Last 12 months
+
+  // Activity timeline
+  firstActivityAt: timestamp("first_activity_at"),
+  lastActivityAt: timestamp("last_activity_at"),
+
+  // Metadata
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: uniqueIndex("idx_activity_stats_user").on(table.userId),
+  emailIdx: index("idx_activity_stats_email").on(table.userEmail),
+  totalDumpedIdx: index("idx_activity_stats_dumped").on(table.totalImeisDumped),
+}));
+
+export type UserActivityStats = typeof userActivityStats.$inferSelect;
+export type NewUserActivityStats = typeof userActivityStats.$inferInsert;
+
+// ============================================================================
 // SHIPPED IMEIs (LEGACY - Keep for backward compatibility)
 // ============================================================================
 export const shippedImeis = pgTable("shipped_imeis", {
