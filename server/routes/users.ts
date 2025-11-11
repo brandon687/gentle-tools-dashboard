@@ -140,4 +140,53 @@ router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * POST /users/:id/force-logout
+ * Force user to re-login by clearing their sessions (admin only)
+ */
+router.post('/:id/force-logout', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    // Prevent self-logout
+    if (req.user!.id === userId) {
+      return res.status(400).json({
+        error: 'Cannot force logout yourself',
+        message: 'You cannot force logout your own account'
+      });
+    }
+
+    // Verify user exists
+    const targetUsers = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (targetUsers.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete all sessions for this user from the session table
+    // The session store uses the 'sess' column which contains JSON with passport.user
+    const pool = (req as any).sessionStore?.pool;
+
+    if (pool) {
+      await pool.query(
+        `DELETE FROM session WHERE sess::text LIKE $1`,
+        [`%"user":${userId}%`]
+      );
+      console.log(`✅ Force logout: Cleared all sessions for user ${userId} (${targetUsers[0].email})`);
+    }
+
+    res.json({
+      success: true,
+      message: `User ${targetUsers[0].email} has been forced to re-login`
+    });
+  } catch (error) {
+    console.error('Error forcing user logout:', error);
+    res.status(500).json({ error: 'Failed to force user logout' });
+  }
+});
+
 export default router;

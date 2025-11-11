@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, UserCheck, UserX, Crown, Loader2, Users, Eye, Calendar, Hash, Copy, Check } from 'lucide-react';
+import { Shield, UserCheck, UserX, Crown, Loader2, Users, Eye, Calendar, Hash, Copy, Check, LogOut } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface UserStats {
@@ -207,6 +207,37 @@ export default function AdminPanel() {
       });
       setSelectedUser(null);
       setActionType(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Force logout mutation
+  const forceLogoutMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await fetch(`/api/users/${userId}/force-logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to force logout');
+      }
+
+      return response.json();
+    },
+    onSuccess: (data, userId) => {
+      const user = users.find(u => u.id === userId);
+      toast({
+        title: 'User Logged Out',
+        description: `${user?.email} has been forced to re-login with Google.`,
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -447,6 +478,16 @@ export default function AdminPanel() {
                               <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>
                           </Select>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => forceLogoutMutation.mutate(user.id)}
+                            disabled={forceLogoutMutation.isPending}
+                            title="Force user to re-login with Google"
+                          >
+                            <LogOut className="h-4 w-4" />
+                          </Button>
 
                           <Button
                             variant={user.isActive ? 'destructive' : 'default'}
