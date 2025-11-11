@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../db/schema';
+import { googleOAuthEnabled } from '../config/passport';
 
 // Extend Express Request to include user
 declare global {
@@ -23,6 +24,12 @@ declare global {
  * Checks if user is logged in via session
  */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // If OAuth is disabled, skip authentication check (development mode)
+  if (!googleOAuthEnabled) {
+    console.warn('⚠️  Auth middleware bypassed - OAuth is disabled');
+    return next();
+  }
+
   if (!req.isAuthenticated() || !req.user) {
     return res.status(401).json({
       error: 'Unauthorized',
@@ -46,6 +53,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
  * Must be used after requireAuth
  */
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  // If OAuth is disabled, skip authentication check (development mode)
+  if (!googleOAuthEnabled) {
+    console.warn('⚠️  Admin middleware bypassed - OAuth is disabled');
+    return next();
+  }
+
   if (!req.user) {
     return res.status(401).json({
       error: 'Unauthorized',

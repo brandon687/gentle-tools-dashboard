@@ -1,11 +1,24 @@
-import 'dotenv/config';
+import './env'; // Load and validate environment variables first
 import express, { type Request, Response, NextFunction } from "express";
 import session from 'express-session';
 import passport from './config/passport';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import crypto from 'crypto';
 
 const app = express();
+
+// Log all environment variables (redacted for security)
+console.log('🚀 Starting Gentle Tools Dashboard Server');
+console.log('📦 Environment:', process.env.NODE_ENV || 'development');
+console.log('🌍 Available environment variables:');
+Object.keys(process.env).forEach(key => {
+  if (key.includes('SECRET') || key.includes('PASSWORD') || key.includes('KEY')) {
+    console.log(`   ${key}: [REDACTED]`);
+  } else {
+    console.log(`   ${key}: ${process.env[key]?.substring(0, 50)}${(process.env[key]?.length || 0) > 50 ? '...' : ''}`);
+  }
+});
 
 declare module 'http' {
   interface IncomingMessage {
@@ -21,14 +34,19 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
-// Session configuration
-if (!process.env.SESSION_SECRET) {
-  throw new Error('SESSION_SECRET environment variable is required');
+// Session configuration with fallback
+let sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  // Generate a random session secret if not provided
+  sessionSecret = crypto.randomBytes(32).toString('hex');
+  console.warn('⚠️  SESSION_SECRET not set. Using randomly generated secret.');
+  console.warn('⚠️  This will cause sessions to be lost on server restart.');
+  console.warn('⚠️  Please set SESSION_SECRET environment variable for production.');
 }
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET,
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {

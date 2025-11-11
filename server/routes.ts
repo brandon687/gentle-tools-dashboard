@@ -84,6 +84,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await cleanupStaleSyncs();
 
   // ============================================================================
+  // HEALTH & STATUS CHECK (No auth required for monitoring)
+  // ============================================================================
+  app.get('/health', (req, res) => {
+    const envStatus = {
+      oauth: {
+        configured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CALLBACK_URL),
+        clientIdSet: !!process.env.GOOGLE_CLIENT_ID,
+        clientSecretSet: !!process.env.GOOGLE_CLIENT_SECRET,
+        callbackUrlSet: !!process.env.GOOGLE_CALLBACK_URL,
+      },
+      session: {
+        configured: !!process.env.SESSION_SECRET,
+      },
+      database: {
+        configured: !!process.env.DATABASE_URL,
+        usingInMemory: useInMemory,
+      },
+      admin: {
+        emailsConfigured: !!process.env.ADMIN_EMAILS,
+      },
+      environment: process.env.NODE_ENV || 'development',
+      port: process.env.PORT || '5000',
+    };
+
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: envStatus,
+      message: envStatus.oauth.configured ? 'All systems operational' : 'Running without authentication (development mode)',
+    });
+  });
+
+  // ============================================================================
   // AUTHENTICATION & USER MANAGEMENT ROUTES
   // ============================================================================
   app.use('/auth', authRoutes);
