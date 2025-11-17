@@ -75,8 +75,9 @@ export default function Dashboard() {
         color: item.color,
         lockStatus: item.lockStatus,
         date: item.date,
-        grade: item.grade || item.label, // Use grade from Stock sheet, fallback to label (master carton)
+        grade: item.grade || item.label, // Use grade from Inbound sheet, fallback to label (master carton)
         concat: item.label, // Store master carton label in concat field for grouping
+        age: item.supplier, // Store supplier in age field (repurposing unused field)
       }));
     }
 

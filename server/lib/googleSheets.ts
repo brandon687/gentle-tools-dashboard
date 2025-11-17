@@ -72,7 +72,8 @@ export interface RawInventoryRow {
   color?: string;
   lockStatus?: string;
   date?: string;
-  grade?: string; // Added: will be populated from Stock sheet
+  grade?: string; // Populated from Inbound sheet column L
+  supplier?: string; // Populated from Inbound sheet column M
 }
 
 export interface InventoryDataResponse {
@@ -212,13 +213,17 @@ async function fetchOutboundSheetData(sheetName: string, auth: string | JWT): Pr
   }
 }
 
-async function fetchInboundGradeMapping(auth: string | JWT): Promise<Map<string, string>> {
+interface InboundData {
+  grade?: string;
+  supplier?: string;
+}
+
+async function fetchInboundMapping(auth: string | JWT): Promise<Map<string, InboundData>> {
   const sheets = google.sheets({ version: 'v4', auth });
-  const gradeMap = new Map<string, string>();
+  const inboundMap = new Map<string, InboundData>();
 
   try {
-    // Fetch Inbound sheet columns A:M to get IMEI and GRADE
-    // We need to get all columns to find IMEI, then use columns L:M for GRADE and SUPPLIER
+    // Fetch Inbound sheet columns A:M to get IMEI, GRADE (L), and SUPPLIER (M)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: RAW_INVENTORY_SPREADSHEET_ID,
       range: `Inbound!A:M`,
@@ -227,8 +232,8 @@ async function fetchInboundGradeMapping(auth: string | JWT): Promise<Map<string,
     const rows = response.data.values;
 
     if (!rows || rows.length < 2) {
-      console.log('[Inbound] Not enough rows for grade mapping');
-      return gradeMap;
+      console.log('[Inbound] Not enough rows for mapping');
+      return inboundMap;
     }
 
     // Row 1 (index 0) has headers, data starts at row 2 (index 1)
@@ -237,38 +242,41 @@ async function fetchInboundGradeMapping(auth: string | JWT): Promise<Map<string,
 
     console.log('[Inbound] Headers:', headers);
 
-    // Find IMEI and GRADE column indices
+    // Find IMEI, GRADE, and SUPPLIER column indices
     let imeiIndex = -1;
     let gradeIndex = -1;
+    let supplierIndex = -1;
 
     headers.forEach((header, index) => {
       const normalizedHeader = header?.toString().trim().toUpperCase();
       if (normalizedHeader === 'IMEI') imeiIndex = index;
       if (normalizedHeader === 'GRADE') gradeIndex = index;
+      if (normalizedHeader === 'SUPPLIER') supplierIndex = index;
     });
 
-    console.log(`[Inbound] IMEI column index: ${imeiIndex}, GRADE column index: ${gradeIndex}`);
+    console.log(`[Inbound] IMEI column: ${imeiIndex}, GRADE column: ${gradeIndex}, SUPPLIER column: ${supplierIndex}`);
 
-    if (imeiIndex === -1 || gradeIndex === -1) {
-      console.warn('[Inbound] Could not find IMEI or GRADE columns');
-      console.warn('[Inbound] Available headers:', headers);
-      return gradeMap;
+    if (imeiIndex === -1) {
+      console.warn('[Inbound] Could not find IMEI column');
+      return inboundMap;
     }
 
-    // Build IMEI -> GRADE mapping
-    dataRows.forEach((row, idx) => {
+    // Build IMEI -> {grade, supplier} mapping
+    dataRows.forEach((row) => {
       const imei = row[imeiIndex]?.toString().trim();
-      const grade = row[gradeIndex]?.toString().trim();
-      if (imei && grade) {
-        gradeMap.set(imei, grade);
+      if (imei) {
+        inboundMap.set(imei, {
+          grade: gradeIndex !== -1 ? row[gradeIndex]?.toString().trim() : undefined,
+          supplier: supplierIndex !== -1 ? row[supplierIndex]?.toString().trim() : undefined,
+        });
       }
     });
 
-    console.log(`[Inbound] Built grade mapping with ${gradeMap.size} entries`);
-    return gradeMap;
+    console.log(`[Inbound] Built mapping with ${inboundMap.size} entries`);
+    return inboundMap;
   } catch (error: any) {
-    console.error('[Inbound] Error fetching grade mapping:', error.message);
-    return gradeMap;
+    console.error('[Inbound] Error fetching mapping:', error.message);
+    return inboundMap;
   }
 }
 
@@ -276,9 +284,9 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
-    // First, fetch the Inbound sheet to get IMEI-to-GRADE mapping
-    console.log('[Raw Inventory] Fetching grade mapping from Inbound sheet...');
-    const gradeMap = await fetchInboundGradeMapping(auth);
+    // First, fetch the Inbound sheet to get IMEI-to-{grade, supplier} mapping
+    console.log('[Raw Inventory] Fetching grade and supplier mapping from Inbound sheet...');
+    const inboundMap = await fetchInboundMapping(auth);
 
     // Fetch columns M:S which contain the "REMAIN" inventory after removals
     const response = await sheets.spreadsheets.values.get({
@@ -343,6 +351,8 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
 
     const rawInventoryItems: RawInventoryRow[] = dataRows.map((row) => {
       const imei = getColumnValue(row, 'IMEI');
+      const inboundData = imei ? inboundMap.get(imei) : undefined;
+
       return {
         label: getColumnValue(row, 'LABEL'),
         imei: imei,
@@ -351,7 +361,8 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
         color: getColumnValue(row, 'COLOR'),
         lockStatus: getColumnValue(row, 'LOCK STATUS'),
         date: getColumnValue(row, 'DATE'),
-        grade: imei ? gradeMap.get(imei) : undefined, // Lookup grade from Stock sheet
+        grade: inboundData?.grade,
+        supplier: inboundData?.supplier,
       };
     });
 

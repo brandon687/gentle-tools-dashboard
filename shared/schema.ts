@@ -23,6 +23,7 @@ export const rawInventoryItemSchema = z.object({
   lockStatus: z.string().optional(),
   date: z.string().optional(),
   grade: z.string().optional(),
+  supplier: z.string().optional(),
 });
 
 export type RawInventoryItem = z.infer<typeof rawInventoryItemSchema>;
