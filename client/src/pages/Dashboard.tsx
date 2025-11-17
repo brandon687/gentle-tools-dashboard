@@ -14,6 +14,7 @@ import ShippedIMEIsManager from "@/components/ShippedIMEIsManager";
 import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 import { OutboundSyncCard } from "@/components/OutboundSyncCard";
 import { RawInventoryRefreshCard } from "@/components/RawInventoryRefreshCard";
+import RawInventoryView from "@/components/RawInventoryView";
 import MovementLog from "@/components/MovementLog";
 import OutboundIMEIsView from "@/components/OutboundIMEIsView";
 import AdminPanel from "@/components/AdminPanel";
@@ -356,63 +357,25 @@ export default function Dashboard() {
           </TabsContent>
 
           <TabsContent value="raw" className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-                Breakdown by Label
-                <span className="font-normal text-base ml-3 normal-case">
-                  ({inventoryData?.rawInventory?.length || 0} total devices • Click to expand)
-                </span>
-              </h3>
-              <ExpandableGradeSection items={currentItems} />
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+              <div>
                 <h3 className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
-                  Detailed View
+                  Raw Inventory by Grade, Model & Master Carton
                   <span className="font-normal text-base ml-3 normal-case">
-                    ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
+                    ({inventoryData?.rawInventory?.length || 0} total devices)
                   </span>
                 </h3>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <ExportButtons items={filteredItems} />
-
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsInvMatchOpen(true)}
-                    data-testid="button-inv-match"
-                  >
-                    <Scan className="w-4 h-4 mr-2" />
-                    INV MATCH
-                  </Button>
-                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Expand grades to see models → master cartons → individual items
+                </p>
               </div>
 
-              <InventoryFilters
-                items={currentItems}
-                selectedGrade={filterGrade}
-                selectedModel={filterModel}
-                selectedGB={filterGB}
-                selectedColor={filterColor}
-                selectedLockStatus={filterLockStatus}
-                onGradeChange={setFilterGrade}
-                onModelChange={setFilterModel}
-                onGBChange={setFilterGB}
-                onColorChange={setFilterColor}
-                onLockStatusChange={setFilterLockStatus}
-                onClearAll={handleClearFilters}
-              />
-
-              {filteredItems.length === 0 ? (
-                <EmptyFilterState hasActiveFilters={hasActiveFilters} />
-              ) : (
-                <PivotView
-                  items={filteredItems}
-                  onViewDetails={handleViewDetails}
-                />
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <ExportButtons items={currentItems} />
+              </div>
             </div>
+
+            <RawInventoryView items={currentItems} />
           </TabsContent>
 
           <TabsContent value="reconciled" className="space-y-6">
