@@ -215,9 +215,10 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
+    // Fetch columns M:S which contain the "REMAIN" inventory after removals
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: RAW_INVENTORY_SPREADSHEET_ID,
-      range: `${RAW_INVENTORY_SHEET}!A:G`,
+      range: `${RAW_INVENTORY_SHEET}!M:S`,
     });
 
     const rows = response.data.values;
@@ -240,11 +241,15 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
     headers.forEach((header, index) => {
       const normalizedHeader = header.toString().trim().toUpperCase();
       headerMap.set(normalizedHeader, index);
+      console.log(`[${RAW_INVENTORY_SHEET}] Column ${index}: "${normalizedHeader}"`);
     });
 
     const getColumnValue = (row: any[], columnName: string): string | undefined => {
       const index = headerMap.get(columnName);
-      if (index === undefined) return undefined;
+      if (index === undefined) {
+        console.warn(`[${RAW_INVENTORY_SHEET}] Column "${columnName}" not found in headers`);
+        return undefined;
+      }
       const value = row[index];
       return value ? value.toString().trim() : undefined;
     };
@@ -258,6 +263,8 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
       lockStatus: getColumnValue(row, 'LOCK STATUS'),
       date: getColumnValue(row, 'DATE'),
     }));
+
+    console.log(`[${RAW_INVENTORY_SHEET}] Sample item:`, rawInventoryItems[0]);
 
     // Filter out items without IMEIs
     const validItems = rawInventoryItems.filter(item => item.imei);
