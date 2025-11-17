@@ -13,6 +13,7 @@ import EmptyFilterState from "@/components/EmptyFilterState";
 import ShippedIMEIsManager from "@/components/ShippedIMEIsManager";
 import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 import { OutboundSyncCard } from "@/components/OutboundSyncCard";
+import { RawInventoryRefreshCard } from "@/components/RawInventoryRefreshCard";
 import MovementLog from "@/components/MovementLog";
 import OutboundIMEIsView from "@/components/OutboundIMEIsView";
 import AdminPanel from "@/components/AdminPanel";
@@ -257,12 +258,18 @@ export default function Dashboard() {
           </TabsList>
 
           <TabsContent value="insights" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div>
                 <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
                   Database Sync Status
                 </h3>
                 <SyncStatusIndicator />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+                  Raw Inventory Refresh
+                </h3>
+                <RawInventoryRefreshCard />
               </div>
               <div>
                 <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
