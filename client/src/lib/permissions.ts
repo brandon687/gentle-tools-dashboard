@@ -1,13 +1,13 @@
 import { UserRole } from '@/contexts/AuthContext';
 
-export type TabName = 'insights' | 'physical' | 'reconciled' | 'outbound' | 'shipped' | 'movements' | 'admin';
+export type TabName = 'insights' | 'physical' | 'raw' | 'reconciled' | 'outbound' | 'shipped' | 'movements' | 'admin';
 
 /**
  * Define which tabs each role can access
  */
 const ROLE_TAB_ACCESS: Record<UserRole, TabName[]> = {
-  power_user: ['physical', 'reconciled', 'shipped'],
-  admin: ['insights', 'physical', 'reconciled', 'outbound', 'shipped', 'movements', 'admin'],
+  power_user: ['physical', 'raw', 'reconciled', 'shipped'],
+  admin: ['insights', 'physical', 'raw', 'reconciled', 'outbound', 'shipped', 'movements', 'admin'],
 };
 
 /**
@@ -37,6 +37,10 @@ export const TAB_CONFIG: Record<TabName, { label: string; description: string }>
   physical: {
     label: 'Physical Inventory',
     description: 'Full inventory excluding shipped items'
+  },
+  raw: {
+    label: 'Raw Inventory',
+    description: 'Raw inventory from Dump sheet'
   },
   reconciled: {
     label: 'Pending Outbound',

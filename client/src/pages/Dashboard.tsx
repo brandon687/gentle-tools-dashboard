@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useTransition, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { InventoryItem, InventoryDataResponse } from "@shared/schema";
+import { InventoryItem, RawInventoryItem, InventoryDataResponse } from "@shared/schema";
 import Header from "@/components/Header";
 import DashboardStats from "@/components/DashboardStats";
 import ExpandableGradeSection from "@/components/ExpandableGradeSection";
@@ -28,7 +28,7 @@ export default function Dashboard() {
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isInvMatchOpen, setIsInvMatchOpen] = useState(false);
-  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'reconciled' | 'shipped' | 'outbound' | 'movements' | 'admin'>(
+  const [activeDataset, setActiveDataset] = useState<'insights' | 'physical' | 'raw' | 'reconciled' | 'shipped' | 'outbound' | 'movements' | 'admin'>(
     user?.role === 'admin' ? 'insights' : 'physical'
   );
   const [isPending, startTransition] = useTransition();
@@ -61,6 +61,20 @@ export default function Dashboard() {
     if (activeDataset === 'physical') {
       const shippedSet = new Set(shippedIMEIs);
       return inventoryData.physicalInventory.filter(item => !shippedSet.has(item.imei || ''));
+    }
+
+    // Raw inventory - shows all items from the raw inventory sheet
+    if (activeDataset === 'raw') {
+      // Convert raw inventory items to InventoryItem format for consistent display
+      return (inventoryData.rawInventory || []).map(item => ({
+        imei: item.imei,
+        model: item.model,
+        gb: item.gb,
+        color: item.color,
+        lockStatus: item.lockStatus,
+        date: item.date,
+        grade: item.label, // Use label as grade for display purposes
+      }));
     }
 
     // Reconciled inventory - only shows items that have been marked as shipped
@@ -191,7 +205,7 @@ export default function Dashboard() {
         </div>
 
         <Tabs value={activeDataset} onValueChange={(v) => setActiveDataset(v as any)} className="space-y-6">
-          <TabsList className="grid w-full max-w-7xl grid-cols-6">
+          <TabsList className="grid w-full max-w-7xl grid-cols-8">
             {canAccessTab(user?.role, 'insights') && (
               <TabsTrigger value="insights" data-testid="tab-quick-insights" className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
@@ -202,6 +216,12 @@ export default function Dashboard() {
               <TabsTrigger value="physical" data-testid="tab-physical-inventory" className="flex items-center gap-2">
                 <Database className="w-4 h-4" />
                 Physical Inventory
+              </TabsTrigger>
+            )}
+            {canAccessTab(user?.role, 'raw') && (
+              <TabsTrigger value="raw" data-testid="tab-raw-inventory" className="flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                Raw Inventory
               </TabsTrigger>
             )}
             {canAccessTab(user?.role, 'reconciled') && (
@@ -290,6 +310,66 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <ExportButtons items={filteredItems} />
                   
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsInvMatchOpen(true)}
+                    data-testid="button-inv-match"
+                  >
+                    <Scan className="w-4 h-4 mr-2" />
+                    INV MATCH
+                  </Button>
+                </div>
+              </div>
+
+              <InventoryFilters
+                items={currentItems}
+                selectedGrade={filterGrade}
+                selectedModel={filterModel}
+                selectedGB={filterGB}
+                selectedColor={filterColor}
+                selectedLockStatus={filterLockStatus}
+                onGradeChange={setFilterGrade}
+                onModelChange={setFilterModel}
+                onGBChange={setFilterGB}
+                onColorChange={setFilterColor}
+                onLockStatusChange={setFilterLockStatus}
+                onClearAll={handleClearFilters}
+              />
+
+              {filteredItems.length === 0 ? (
+                <EmptyFilterState hasActiveFilters={hasActiveFilters} />
+              ) : (
+                <PivotView
+                  items={filteredItems}
+                  onViewDetails={handleViewDetails}
+                />
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="raw" className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+                Breakdown by Label
+                <span className="font-normal text-base ml-3 normal-case">
+                  ({inventoryData?.rawInventory?.length || 0} total devices • Click to expand)
+                </span>
+              </h3>
+              <ExpandableGradeSection items={currentItems} />
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <h3 className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
+                  Detailed View
+                  <span className="font-normal text-base ml-3 normal-case">
+                    ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
+                  </span>
+                </h3>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ExportButtons items={filteredItems} />
+
                   <Button
                     variant="outline"
                     onClick={() => setIsInvMatchOpen(true)}

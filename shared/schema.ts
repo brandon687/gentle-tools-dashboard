@@ -14,6 +14,18 @@ export const inventoryItemSchema = z.object({
 
 export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 
+export const rawInventoryItemSchema = z.object({
+  label: z.string().optional(),
+  imei: z.string().optional(),
+  model: z.string().optional(),
+  gb: z.string().optional(),
+  color: z.string().optional(),
+  lockStatus: z.string().optional(),
+  date: z.string().optional(),
+});
+
+export type RawInventoryItem = z.infer<typeof rawInventoryItemSchema>;
+
 export interface InventoryStats {
   totalDevices: number;
   byGrade: Array<{ grade: string; count: number }>;
@@ -24,4 +36,5 @@ export interface InventoryStats {
 export interface InventoryDataResponse {
   physicalInventory: InventoryItem[];
   gradedToFallout: InventoryItem[];
+  rawInventory?: RawInventoryItem[];
 }
