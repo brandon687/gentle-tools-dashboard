@@ -225,14 +225,18 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
 
     console.log(`[${RAW_INVENTORY_SHEET}] Fetched ${rows?.length || 0} total rows from sheet`);
 
-    if (!rows || rows.length < 3) {
+    if (!rows || rows.length < 4) {
       console.log(`[${RAW_INVENTORY_SHEET}] Not enough rows, returning empty`);
       return [];
     }
 
-    // Row 1 is count statement (ignore), Row 2 (index 1) has headers, data starts from row 3 (index 2)
-    const headers = rows[1];
-    const dataRows = rows.slice(2);
+    // For REMAIN section (columns M:S):
+    // Row 1 is "DUMP" label (ignore)
+    // Row 2 is "REMAIN" with count (ignore)
+    // Row 3 (index 2) has headers: LABEL, IMEI, MODEL, GB, COLOR, LOCK STATUS, DATE
+    // Row 4+ (index 3+) is data
+    const headers = rows[2];
+    const dataRows = rows.slice(3);
 
     console.log(`[${RAW_INVENTORY_SHEET}] Headers:`, headers);
     console.log(`[${RAW_INVENTORY_SHEET}] Processing ${dataRows.length} data rows`);
