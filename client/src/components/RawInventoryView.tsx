@@ -143,9 +143,80 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
     });
   };
 
+  // Calculate summary statistics by Supplier + Grade across all models
+  const supplierGradeSummary = useMemo(() => {
+    const summaryMap = new Map<string, { supplier: string; grade: string; deviceCount: number; cartonCount: number }>();
+
+    groupedData.forEach((group) => {
+      group.supplierGradeGroups.forEach((sg) => {
+        const key = `${sg.supplier}|${sg.grade}`;
+        const existing = summaryMap.get(key);
+
+        if (existing) {
+          existing.deviceCount += sg.totalDevices;
+          existing.cartonCount += sg.masterCartons.length;
+        } else {
+          summaryMap.set(key, {
+            supplier: sg.supplier,
+            grade: sg.grade,
+            deviceCount: sg.totalDevices,
+            cartonCount: sg.masterCartons.length,
+          });
+        }
+      });
+    });
+
+    // Sort by grade order, then supplier
+    const gradeOrder = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D', 'FALLOUT', 'Unknown Grade'];
+    return Array.from(summaryMap.values()).sort((a, b) => {
+      const aGradeIdx = gradeOrder.indexOf(a.grade);
+      const bGradeIdx = gradeOrder.indexOf(b.grade);
+      if (aGradeIdx !== bGradeIdx) return aGradeIdx - bGradeIdx;
+      return a.supplier.localeCompare(b.supplier);
+    });
+  }, [groupedData]);
+
   return (
-    <div className="space-y-3">
-      {groupedData.map((group) => {
+    <div className="space-y-6">
+      {/* Summary Cards: Supplier + Grade Overview */}
+      {supplierGradeSummary.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-1">
+            INVENTORY BY SUPPLIER & GRADE
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {supplierGradeSummary.map((summary) => (
+              <Card key={`${summary.supplier}|${summary.grade}`} className="overflow-hidden">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <Badge variant="default" className="font-semibold">
+                        {summary.grade}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-semibold text-sm truncate">
+                      {summary.supplier}
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{summary.cartonCount} cartons</span>
+                      <Badge variant="secondary" className="text-xs px-2 py-0">
+                        {summary.deviceCount}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Detailed Breakdown by Model */}
+      <div className="space-y-3">
+        {groupedData.map((group) => {
         const modelGBKey = `${group.model}|${group.gb}`;
         const isModelGBExpanded = expandedModelGB.has(modelGBKey);
 
@@ -315,13 +386,14 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
         );
       })}
 
-      {groupedData.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            No raw inventory items found
-          </CardContent>
-        </Card>
-      )}
+        {groupedData.length === 0 && (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              No raw inventory items found
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
