@@ -223,7 +223,10 @@ async function fetchInboundMapping(auth: string | JWT): Promise<Map<string, Inbo
   const inboundMap = new Map<string, InboundData>();
 
   try {
-    // Fetch Inbound sheet columns A:M to get IMEI, GRADE (L), and SUPPLIER (M)
+    // Fetch Inbound sheet columns A:M
+    // Column A = Master Carton ID (this is the key)
+    // Column H = GRADE - Raw
+    // Column M = SUPPLIER
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: RAW_INVENTORY_SPREADSHEET_ID,
       range: `Inbound!A:M`,
@@ -242,37 +245,27 @@ async function fetchInboundMapping(auth: string | JWT): Promise<Map<string, Inbo
 
     console.log('[Inbound] Headers:', headers);
 
-    // Find IMEI, GRADE, and SUPPLIER column indices
-    let imeiIndex = -1;
-    let gradeIndex = -1;
-    let supplierIndex = -1;
+    // Column A = Master Carton ID (index 0)
+    // Column H = GRADE - Raw (index 7)
+    // Column M = SUPPLIER (index 12)
+    const masterCartonIndex = 0;
+    const gradeIndex = 7; // Column H (GRADE - Raw)
+    const supplierIndex = 12; // Column M (SUPPLIER)
 
-    headers.forEach((header, index) => {
-      const normalizedHeader = header?.toString().trim().toUpperCase();
-      if (normalizedHeader === 'IMEI') imeiIndex = index;
-      if (normalizedHeader === 'GRADE') gradeIndex = index;
-      if (normalizedHeader === 'SUPPLIER') supplierIndex = index;
-    });
+    console.log(`[Inbound] Using Master Carton (col A), GRADE - Raw (col H), SUPPLIER (col M)`);
 
-    console.log(`[Inbound] IMEI column: ${imeiIndex}, GRADE column: ${gradeIndex}, SUPPLIER column: ${supplierIndex}`);
-
-    if (imeiIndex === -1) {
-      console.warn('[Inbound] Could not find IMEI column');
-      return inboundMap;
-    }
-
-    // Build IMEI -> {grade, supplier} mapping
+    // Build Master Carton ID -> {grade, supplier} mapping
     dataRows.forEach((row) => {
-      const imei = row[imeiIndex]?.toString().trim();
-      if (imei) {
-        inboundMap.set(imei, {
-          grade: gradeIndex !== -1 ? row[gradeIndex]?.toString().trim() : undefined,
-          supplier: supplierIndex !== -1 ? row[supplierIndex]?.toString().trim() : undefined,
+      const masterCarton = row[masterCartonIndex]?.toString().trim();
+      if (masterCarton) {
+        inboundMap.set(masterCarton, {
+          grade: gradeIndex !== -1 && row[gradeIndex] ? row[gradeIndex].toString().trim() : undefined,
+          supplier: supplierIndex !== -1 && row[supplierIndex] ? row[supplierIndex].toString().trim() : undefined,
         });
       }
     });
 
-    console.log(`[Inbound] Built mapping with ${inboundMap.size} entries`);
+    console.log(`[Inbound] Built mapping with ${inboundMap.size} master carton entries`);
     return inboundMap;
   } catch (error: any) {
     console.error('[Inbound] Error fetching mapping:', error.message);
@@ -284,8 +277,8 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
-    // First, fetch the Inbound sheet to get IMEI-to-{grade, supplier} mapping
-    console.log('[Raw Inventory] Fetching grade and supplier mapping from Inbound sheet...');
+    // First, fetch the Inbound sheet to get Master Carton ID -> {grade, supplier} mapping
+    console.log('[Raw Inventory] Fetching grade and supplier mapping from Inbound sheet (by Master Carton ID)...');
     const inboundMap = await fetchInboundMapping(auth);
 
     // Fetch columns M:S which contain the "REMAIN" inventory after removals
@@ -351,10 +344,13 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
 
     const rawInventoryItems: RawInventoryRow[] = dataRows.map((row) => {
       const imei = getColumnValue(row, 'IMEI');
-      const inboundData = imei ? inboundMap.get(imei) : undefined;
+      const masterCarton = getColumnValue(row, 'LABEL'); // LABEL = Master Carton ID
+
+      // Look up grade and supplier by Master Carton ID
+      const inboundData = masterCarton ? inboundMap.get(masterCarton) : undefined;
 
       return {
-        label: getColumnValue(row, 'LABEL'),
+        label: masterCarton,
         imei: imei,
         model: getColumnValue(row, 'MODEL'),
         gb: getColumnValue(row, 'GB'),
@@ -371,10 +367,12 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
     // Filter out items without IMEIs
     const validItems = rawInventoryItems.filter(item => item.imei);
 
-    // Count how many items have grades
+    // Count how many items have grades and suppliers
     const itemsWithGrades = validItems.filter(item => item.grade).length;
+    const itemsWithSuppliers = validItems.filter(item => item.supplier).length;
     console.log(`[${RAW_INVENTORY_SHEET}] Final count: ${validItems.length} items with valid IMEIs`);
     console.log(`[${RAW_INVENTORY_SHEET}] Items with grade: ${itemsWithGrades} (${Math.round(itemsWithGrades / validItems.length * 100)}%)`);
+    console.log(`[${RAW_INVENTORY_SHEET}] Items with supplier: ${itemsWithSuppliers} (${Math.round(itemsWithSuppliers / validItems.length * 100)}%)`);
 
     return validItems;
   } catch (error: any) {
