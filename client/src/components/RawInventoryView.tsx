@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, Package, Box } from "lucide-react";
+import { ChevronDown, ChevronRight, Package, Box, Tag } from "lucide-react";
 import { InventoryItem } from "@shared/schema";
 
 interface RawInventoryViewProps {
@@ -13,26 +13,37 @@ interface MasterCartonGroup {
   items: InventoryItem[];
 }
 
-interface ModelGBGroup {
-  model: string;
-  gb: string;
+interface SupplierGradeGroup {
+  supplier: string;
+  grade: string;
   totalDevices: number;
   masterCartons: MasterCartonGroup[];
 }
 
+interface ModelGBGroup {
+  model: string;
+  gb: string;
+  totalDevices: number;
+  supplierGradeGroups: SupplierGradeGroup[];
+}
+
 export default function RawInventoryView({ items }: RawInventoryViewProps) {
   const [expandedModelGB, setExpandedModelGB] = useState<Set<string>>(new Set());
+  const [expandedSupplierGrade, setExpandedSupplierGrade] = useState<Set<string>>(new Set());
   const [expandedCartons, setExpandedCartons] = useState<Set<string>>(new Set());
 
-  // Group items: Model+GB -> Master Carton -> Items
+  // Group items: Model+GB -> Supplier+Grade -> Master Carton -> Items
   const groupedData = useMemo(() => {
     const groups: ModelGBGroup[] = [];
 
     items.forEach((item) => {
       const model = item.model || 'Unknown Model';
       const gb = item.gb || '';
+      const supplier = item.age || 'Unknown Supplier'; // age field stores supplier
+      const grade = item.grade || 'Unknown Grade';
       const masterCarton = item.concat || 'No Label';
 
+      // Find or create Model+GB group
       const modelGBKey = `${model}|${gb}`;
       let group = groups.find(g => `${g.model}|${g.gb}` === modelGBKey);
 
@@ -41,25 +52,54 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
           model,
           gb,
           totalDevices: 0,
-          masterCartons: [],
+          supplierGradeGroups: [],
         };
         groups.push(group);
       }
 
-      let carton = group.masterCartons.find(c => c.label === masterCarton);
+      // Find or create Supplier+Grade group within Model+GB
+      const supplierGradeKey = `${supplier}|${grade}`;
+      let supplierGradeGroup = group.supplierGradeGroups.find(
+        sg => `${sg.supplier}|${sg.grade}` === supplierGradeKey
+      );
+
+      if (!supplierGradeGroup) {
+        supplierGradeGroup = {
+          supplier,
+          grade,
+          totalDevices: 0,
+          masterCartons: [],
+        };
+        group.supplierGradeGroups.push(supplierGradeGroup);
+      }
+
+      // Find or create Master Carton within Supplier+Grade group
+      let carton = supplierGradeGroup.masterCartons.find(c => c.label === masterCarton);
       if (!carton) {
         carton = {
           label: masterCarton,
           items: [],
         };
-        group.masterCartons.push(carton);
+        supplierGradeGroup.masterCartons.push(carton);
       }
 
       carton.items.push(item);
+      supplierGradeGroup.totalDevices++;
       group.totalDevices++;
     });
 
-    // Sort by model name
+    // Sort by model name and gb
+    groups.forEach(group => {
+      // Sort supplier+grade groups by grade then supplier
+      const gradeOrder = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D', 'FALLOUT', 'Unknown Grade'];
+      group.supplierGradeGroups.sort((a, b) => {
+        const aGradeIdx = gradeOrder.indexOf(a.grade);
+        const bGradeIdx = gradeOrder.indexOf(b.grade);
+        if (aGradeIdx !== bGradeIdx) return aGradeIdx - bGradeIdx;
+        return a.supplier.localeCompare(b.supplier);
+      });
+    });
+
     return groups.sort((a, b) => {
       const modelCompare = a.model.localeCompare(b.model);
       if (modelCompare !== 0) return modelCompare;
@@ -69,6 +109,18 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
 
   const toggleModelGB = (key: string) => {
     setExpandedModelGB(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSupplierGrade = (key: string) => {
+    setExpandedSupplierGrade(prev => {
       const newSet = new Set(prev);
       if (newSet.has(key)) {
         newSet.delete(key);
@@ -95,7 +147,13 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
     <div className="space-y-3">
       {groupedData.map((group) => {
         const modelGBKey = `${group.model}|${group.gb}`;
-        const isExpanded = expandedModelGB.has(modelGBKey);
+        const isModelGBExpanded = expandedModelGB.has(modelGBKey);
+
+        // Calculate total master cartons across all supplier+grade groups
+        const totalMasterCartons = group.supplierGradeGroups.reduce(
+          (sum, sg) => sum + sg.masterCartons.length,
+          0
+        );
 
         return (
           <Card key={modelGBKey} className="overflow-hidden">
@@ -105,7 +163,7 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
               className="w-full px-6 py-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
             >
               <div className="flex items-center gap-4">
-                {isExpanded ? (
+                {isModelGBExpanded ? (
                   <ChevronDown className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 ) : (
                   <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
@@ -116,7 +174,7 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
                     <span className="font-bold text-lg">{group.model} {group.gb}</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {group.masterCartons.length} master carton{group.masterCartons.length !== 1 ? 's' : ''}
+                    {totalMasterCartons} master carton{totalMasterCartons !== 1 ? 's' : ''}
                   </p>
                 </div>
               </div>
@@ -125,85 +183,127 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
               </Badge>
             </button>
 
-            {/* Level 2: Master Cartons List */}
-            {isExpanded && (
+            {/* Level 2: Supplier + Grade Groups */}
+            {isModelGBExpanded && (
               <div className="border-t bg-muted/10">
-                {group.masterCartons.map((carton) => {
-                  const cartonKey = `${modelGBKey}|${carton.label}`;
-                  const isCartonExpanded = expandedCartons.has(cartonKey);
+                {group.supplierGradeGroups.map((supplierGrade) => {
+                  const supplierGradeKey = `${modelGBKey}|${supplierGrade.supplier}|${supplierGrade.grade}`;
+                  const isSupplierGradeExpanded = expandedSupplierGrade.has(supplierGradeKey);
 
                   return (
-                    <div key={cartonKey} className="border-b last:border-b-0">
+                    <div key={supplierGradeKey} className="border-b last:border-b-0">
                       <button
-                        onClick={() => toggleCarton(cartonKey)}
+                        onClick={() => toggleSupplierGrade(supplierGradeKey)}
                         className="w-full px-6 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          {isCartonExpanded ? (
+                          {isSupplierGradeExpanded ? (
                             <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           ) : (
                             <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                           )}
-                          <Box className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                          <span className="font-mono text-sm font-semibold">
-                            {carton.label}
+                          <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">
+                              {supplierGrade.supplier}
+                            </span>
+                            <Badge variant="default" className="font-semibold">
+                              {supplierGrade.grade}
+                            </Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground ml-2">
+                            {supplierGrade.masterCartons.length} carton{supplierGrade.masterCartons.length !== 1 ? 's' : ''}
                           </span>
                         </div>
                         <Badge variant="secondary" className="text-sm px-3 py-1">
-                          {carton.items.length}
+                          {supplierGrade.totalDevices}
                         </Badge>
                       </button>
 
-                      {/* Level 3: Device Details Table (like physical inventory) */}
-                      {isCartonExpanded && (
-                        <div className="bg-background">
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead className="bg-muted/50 border-y">
-                                <tr>
-                                  <th className="px-4 py-3 text-left font-semibold">IMEI</th>
-                                  <th className="px-4 py-3 text-left font-semibold">MODEL</th>
-                                  <th className="px-4 py-3 text-left font-semibold">GB</th>
-                                  <th className="px-4 py-3 text-left font-semibold">COLOR</th>
-                                  <th className="px-4 py-3 text-left font-semibold">LOCK STATUS</th>
-                                  <th className="px-4 py-3 text-left font-semibold">GRADE</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {carton.items.map((item, idx) => (
-                                  <tr
-                                    key={`${item.imei}-${idx}`}
-                                    className="border-b last:border-b-0 hover:bg-muted/20 transition-colors"
-                                  >
-                                    <td className="px-4 py-3 font-mono text-xs">
-                                      {item.imei || 'No IMEI'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      {item.model || '-'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      {item.gb || '-'}
-                                    </td>
-                                    <td className="px-4 py-3 font-medium">
-                                      {item.color || 'Unknown'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      {item.lockStatus || '-'}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      {item.grade ? (
-                                        <Badge variant="outline" className="text-xs">
-                                          {item.grade}
-                                        </Badge>
-                                      ) : (
-                                        '-'
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                      {/* Level 3: Master Cartons List */}
+                      {isSupplierGradeExpanded && (
+                        <div className="bg-muted/20 border-t">
+                          {supplierGrade.masterCartons.map((carton) => {
+                            const cartonKey = `${supplierGradeKey}|${carton.label}`;
+                            const isCartonExpanded = expandedCartons.has(cartonKey);
+
+                            return (
+                              <div key={cartonKey} className="border-b last:border-b-0">
+                                <button
+                                  onClick={() => toggleCarton(cartonKey)}
+                                  className="w-full px-8 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    {isCartonExpanded ? (
+                                      <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                    )}
+                                    <Box className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                    <span className="font-mono text-sm font-semibold">
+                                      {carton.label}
+                                    </span>
+                                  </div>
+                                  <Badge variant="secondary" className="text-sm px-3 py-1">
+                                    {carton.items.length}
+                                  </Badge>
+                                </button>
+
+                                {/* Level 4: Device Details Table */}
+                                {isCartonExpanded && (
+                                  <div className="bg-background">
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-muted/50 border-y">
+                                          <tr>
+                                            <th className="px-4 py-3 text-left font-semibold">IMEI</th>
+                                            <th className="px-4 py-3 text-left font-semibold">MODEL</th>
+                                            <th className="px-4 py-3 text-left font-semibold">GB</th>
+                                            <th className="px-4 py-3 text-left font-semibold">COLOR</th>
+                                            <th className="px-4 py-3 text-left font-semibold">LOCK STATUS</th>
+                                            <th className="px-4 py-3 text-left font-semibold">GRADE</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {carton.items.map((item, idx) => (
+                                            <tr
+                                              key={`${item.imei}-${idx}`}
+                                              className="border-b last:border-b-0 hover:bg-muted/20 transition-colors"
+                                            >
+                                              <td className="px-4 py-3 font-mono text-xs">
+                                                {item.imei || 'No IMEI'}
+                                              </td>
+                                              <td className="px-4 py-3">
+                                                {item.model || '-'}
+                                              </td>
+                                              <td className="px-4 py-3">
+                                                {item.gb || '-'}
+                                              </td>
+                                              <td className="px-4 py-3 font-medium">
+                                                {item.color || 'Unknown'}
+                                              </td>
+                                              <td className="px-4 py-3">
+                                                {item.lockStatus || '-'}
+                                              </td>
+                                              <td className="px-4 py-3">
+                                                {item.grade ? (
+                                                  <Badge variant="outline" className="text-xs">
+                                                    {item.grade}
+                                                  </Badge>
+                                                ) : (
+                                                  '-'
+                                                )}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
