@@ -224,6 +224,7 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
     const rows = response.data.values;
 
     console.log(`[${RAW_INVENTORY_SHEET}] Fetched ${rows?.length || 0} total rows from sheet`);
+    console.log(`[${RAW_INVENTORY_SHEET}] First 5 rows:`, rows?.slice(0, 5));
 
     if (!rows || rows.length < 4) {
       console.log(`[${RAW_INVENTORY_SHEET}] Not enough rows, returning empty`);
@@ -231,12 +232,29 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
     }
 
     // For REMAIN section (columns M:S):
-    // Row 1 is "DUMP" label (ignore)
-    // Row 2 is "REMAIN" with count (ignore)
-    // Row 3 (index 2) has headers: LABEL, IMEI, MODEL, GB, COLOR, LOCK STATUS, DATE
-    // Row 4+ (index 3+) is data
-    const headers = rows[2];
-    const dataRows = rows.slice(3);
+    // We need to find which row has the headers: LABEL, IMEI, MODEL, GB, COLOR, LOCK STATUS, DATE
+    // Let's check rows 1, 2, and 3 to find the header row
+    let headerRowIndex = -1;
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const row = rows[i];
+      const rowStr = row?.join('|').toUpperCase();
+      console.log(`[${RAW_INVENTORY_SHEET}] Row ${i + 1}:`, rowStr);
+
+      // Look for the row that contains LABEL, IMEI, MODEL - that's our header row
+      if (rowStr?.includes('LABEL') && rowStr?.includes('IMEI') && rowStr?.includes('MODEL')) {
+        headerRowIndex = i;
+        console.log(`[${RAW_INVENTORY_SHEET}] ✓ Found header row at index ${i} (Row ${i + 1})`);
+        break;
+      }
+    }
+
+    if (headerRowIndex === -1) {
+      console.error(`[${RAW_INVENTORY_SHEET}] Could not find header row!`);
+      return [];
+    }
+
+    const headers = rows[headerRowIndex];
+    const dataRows = rows.slice(headerRowIndex + 1);
 
     console.log(`[${RAW_INVENTORY_SHEET}] Headers:`, headers);
     console.log(`[${RAW_INVENTORY_SHEET}] Processing ${dataRows.length} data rows`);
