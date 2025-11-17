@@ -237,8 +237,12 @@ async function fetchRawInventoryData(apiKey: string): Promise<RawInventoryRow[]>
 
     return validItems;
   } catch (error: any) {
-    console.error(`Error fetching ${RAW_INVENTORY_SHEET} sheet data:`, error);
-    throw new Error(`Failed to fetch ${RAW_INVENTORY_SHEET} data: ${error.message}`);
+    console.error(`[${RAW_INVENTORY_SHEET}] Error fetching data:`, error.message);
+    // Return empty array instead of throwing - this makes raw inventory optional
+    if (error.message?.includes('permission') || error.code === 403) {
+      console.warn(`[${RAW_INVENTORY_SHEET}] No access to raw inventory sheet - continuing without it`);
+    }
+    return [];
   }
 }
 
