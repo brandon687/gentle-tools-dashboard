@@ -212,60 +212,51 @@ async function fetchOutboundSheetData(sheetName: string, auth: string | JWT): Pr
   }
 }
 
-async function fetchStockGradeMapping(auth: string | JWT): Promise<Map<string, string>> {
+async function fetchInboundGradeMapping(auth: string | JWT): Promise<Map<string, string>> {
   const sheets = google.sheets({ version: 'v4', auth });
   const gradeMap = new Map<string, string>();
 
   try {
-    // Fetch Stock sheet columns B:H (IMEI, DATE, MODEL, GB, COLOR, LOCK STATUS, GRADE)
+    // Fetch Inbound sheet columns A:M to get IMEI and GRADE
+    // We need to get all columns to find IMEI, then use columns L:M for GRADE and SUPPLIER
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: RAW_INVENTORY_SPREADSHEET_ID,
-      range: `Stock!B:H`,
+      range: `Inbound!A:M`,
     });
 
     const rows = response.data.values;
 
-    if (!rows || rows.length < 3) {
-      console.log('[Stock] Not enough rows for grade mapping');
+    if (!rows || rows.length < 2) {
+      console.log('[Inbound] Not enough rows for grade mapping');
       return gradeMap;
     }
 
-    // Find header row (should be row 2, index 1)
-    let headerRowIndex = -1;
-    for (let i = 0; i < Math.min(3, rows.length); i++) {
-      const row = rows[i];
-      const rowStr = row?.join('|').toUpperCase();
-      if (rowStr?.includes('IMEI') && rowStr?.includes('GRADE')) {
-        headerRowIndex = i;
-        break;
-      }
-    }
+    // Row 1 (index 0) has headers, data starts at row 2 (index 1)
+    const headers = rows[0];
+    const dataRows = rows.slice(1);
 
-    if (headerRowIndex === -1) {
-      console.warn('[Stock] Could not find header row');
-      return gradeMap;
-    }
-
-    const headers = rows[headerRowIndex];
-    const dataRows = rows.slice(headerRowIndex + 1);
+    console.log('[Inbound] Headers:', headers);
 
     // Find IMEI and GRADE column indices
     let imeiIndex = -1;
     let gradeIndex = -1;
 
     headers.forEach((header, index) => {
-      const normalizedHeader = header.toString().trim().toUpperCase();
+      const normalizedHeader = header?.toString().trim().toUpperCase();
       if (normalizedHeader === 'IMEI') imeiIndex = index;
       if (normalizedHeader === 'GRADE') gradeIndex = index;
     });
 
+    console.log(`[Inbound] IMEI column index: ${imeiIndex}, GRADE column index: ${gradeIndex}`);
+
     if (imeiIndex === -1 || gradeIndex === -1) {
-      console.warn('[Stock] Could not find IMEI or GRADE columns');
+      console.warn('[Inbound] Could not find IMEI or GRADE columns');
+      console.warn('[Inbound] Available headers:', headers);
       return gradeMap;
     }
 
     // Build IMEI -> GRADE mapping
-    dataRows.forEach((row) => {
+    dataRows.forEach((row, idx) => {
       const imei = row[imeiIndex]?.toString().trim();
       const grade = row[gradeIndex]?.toString().trim();
       if (imei && grade) {
@@ -273,10 +264,10 @@ async function fetchStockGradeMapping(auth: string | JWT): Promise<Map<string, s
       }
     });
 
-    console.log(`[Stock] Built grade mapping with ${gradeMap.size} entries`);
+    console.log(`[Inbound] Built grade mapping with ${gradeMap.size} entries`);
     return gradeMap;
   } catch (error: any) {
-    console.error('[Stock] Error fetching grade mapping:', error.message);
+    console.error('[Inbound] Error fetching grade mapping:', error.message);
     return gradeMap;
   }
 }
@@ -285,9 +276,9 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
-    // First, fetch the Stock sheet to get IMEI-to-GRADE mapping
-    console.log('[Raw Inventory] Fetching grade mapping from Stock sheet...');
-    const gradeMap = await fetchStockGradeMapping(auth);
+    // First, fetch the Inbound sheet to get IMEI-to-GRADE mapping
+    console.log('[Raw Inventory] Fetching grade mapping from Inbound sheet...');
+    const gradeMap = await fetchInboundGradeMapping(auth);
 
     // Fetch columns M:S which contain the "REMAIN" inventory after removals
     const response = await sheets.spreadsheets.values.get({
