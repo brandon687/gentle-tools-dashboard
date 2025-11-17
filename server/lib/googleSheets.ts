@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import type { JWT } from 'google-auth-library';
 
 const SPREADSHEET_ID = '1CbvbPLJGllfGsb4LWR1RWFktzFGLr8nNanxCz2KrCvw';
 const PHYSICAL_INVENTORY_SHEET = 'PHYSICAL INVENTORY';
@@ -8,6 +9,33 @@ const OUTBOUND_IMEIS_SHEET = 'outbound IMEIs';
 // Raw inventory from new Google Sheet
 const RAW_INVENTORY_SPREADSHEET_ID = '1P7mchy-AJTYZoWggQhRJiPqNkIU2l_eOxmMhlvGzn5A';
 const RAW_INVENTORY_SHEET = 'Dump';
+
+// Create Google Sheets auth client (supports both API key and service account)
+function getAuthClient(): string | JWT {
+  // Try service account first (more secure)
+  const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (serviceAccountKey) {
+    try {
+      const credentials = JSON.parse(serviceAccountKey);
+      return new google.auth.JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+      });
+    } catch (error) {
+      console.error('Failed to parse service account credentials:', error);
+      throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT_KEY format');
+    }
+  }
+
+  // Fall back to API key
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error('Neither GOOGLE_SERVICE_ACCOUNT_KEY nor GOOGLE_API_KEY is configured');
+  }
+
+  return apiKey;
+}
 
 export interface SheetRow {
   _row?: string;
@@ -53,8 +81,8 @@ export interface InventoryDataResponse {
   outboundImeis?: OutboundSheetRow[];
 }
 
-async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetRow[]> {
-  const sheets = google.sheets({ version: 'v4', auth: apiKey });
+async function fetchSheetData(sheetName: string, auth: string | JWT): Promise<SheetRow[]> {
+  const sheets = google.sheets({ version: 'v4', auth });
 
   try {
     const response = await sheets.spreadsheets.values.get({
@@ -110,8 +138,8 @@ async function fetchSheetData(sheetName: string, apiKey: string): Promise<SheetR
   }
 }
 
-async function fetchOutboundSheetData(sheetName: string, apiKey: string): Promise<OutboundSheetRow[]> {
-  const sheets = google.sheets({ version: 'v4', auth: apiKey });
+async function fetchOutboundSheetData(sheetName: string, auth: string | JWT): Promise<OutboundSheetRow[]> {
+  const sheets = google.sheets({ version: 'v4', auth });
 
   try {
     // Limit to first 100000 rows to capture last 3 weeks of data
@@ -183,8 +211,8 @@ async function fetchOutboundSheetData(sheetName: string, apiKey: string): Promis
   }
 }
 
-async function fetchRawInventoryData(apiKey: string): Promise<RawInventoryRow[]> {
-  const sheets = google.sheets({ version: 'v4', auth: apiKey });
+async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRow[]> {
+  const sheets = google.sheets({ version: 'v4', auth });
 
   try {
     const response = await sheets.spreadsheets.values.get({
@@ -247,15 +275,11 @@ async function fetchRawInventoryData(apiKey: string): Promise<RawInventoryRow[]>
 }
 
 export async function fetchInventoryData(): Promise<InventoryDataResponse> {
-  const apiKey = process.env.GOOGLE_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('GOOGLE_API_KEY is not configured');
-  }
+  const auth = getAuthClient();
 
   const [physicalInventory, rawInventory] = await Promise.all([
-    fetchSheetData(PHYSICAL_INVENTORY_SHEET, apiKey),
-    fetchRawInventoryData(apiKey),
+    fetchSheetData(PHYSICAL_INVENTORY_SHEET, auth),
+    fetchRawInventoryData(auth),
   ]);
 
   return {
@@ -266,11 +290,6 @@ export async function fetchInventoryData(): Promise<InventoryDataResponse> {
 }
 
 export async function fetchOutboundData(): Promise<OutboundSheetRow[]> {
-  const apiKey = process.env.GOOGLE_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('GOOGLE_API_KEY is not configured');
-  }
-
-  return await fetchOutboundSheetData(OUTBOUND_IMEIS_SHEET, apiKey);
+  const auth = getAuthClient();
+  return await fetchOutboundSheetData(OUTBOUND_IMEIS_SHEET, auth);
 }
