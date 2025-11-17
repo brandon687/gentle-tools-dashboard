@@ -74,7 +74,8 @@ export default function Dashboard() {
         color: item.color,
         lockStatus: item.lockStatus,
         date: item.date,
-        grade: item.label, // Use label as grade for display purposes
+        grade: item.grade || item.label, // Use grade from Stock sheet, fallback to label (master carton)
+        concat: item.label, // Store master carton label in concat field for grouping
       }));
     }
 

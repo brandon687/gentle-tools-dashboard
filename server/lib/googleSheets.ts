@@ -72,6 +72,7 @@ export interface RawInventoryRow {
   color?: string;
   lockStatus?: string;
   date?: string;
+  grade?: string; // Added: will be populated from Stock sheet
 }
 
 export interface InventoryDataResponse {
@@ -211,10 +212,83 @@ async function fetchOutboundSheetData(sheetName: string, auth: string | JWT): Pr
   }
 }
 
+async function fetchStockGradeMapping(auth: string | JWT): Promise<Map<string, string>> {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const gradeMap = new Map<string, string>();
+
+  try {
+    // Fetch Stock sheet columns B:H (IMEI, DATE, MODEL, GB, COLOR, LOCK STATUS, GRADE)
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: RAW_INVENTORY_SPREADSHEET_ID,
+      range: `Stock!B:H`,
+    });
+
+    const rows = response.data.values;
+
+    if (!rows || rows.length < 3) {
+      console.log('[Stock] Not enough rows for grade mapping');
+      return gradeMap;
+    }
+
+    // Find header row (should be row 2, index 1)
+    let headerRowIndex = -1;
+    for (let i = 0; i < Math.min(3, rows.length); i++) {
+      const row = rows[i];
+      const rowStr = row?.join('|').toUpperCase();
+      if (rowStr?.includes('IMEI') && rowStr?.includes('GRADE')) {
+        headerRowIndex = i;
+        break;
+      }
+    }
+
+    if (headerRowIndex === -1) {
+      console.warn('[Stock] Could not find header row');
+      return gradeMap;
+    }
+
+    const headers = rows[headerRowIndex];
+    const dataRows = rows.slice(headerRowIndex + 1);
+
+    // Find IMEI and GRADE column indices
+    let imeiIndex = -1;
+    let gradeIndex = -1;
+
+    headers.forEach((header, index) => {
+      const normalizedHeader = header.toString().trim().toUpperCase();
+      if (normalizedHeader === 'IMEI') imeiIndex = index;
+      if (normalizedHeader === 'GRADE') gradeIndex = index;
+    });
+
+    if (imeiIndex === -1 || gradeIndex === -1) {
+      console.warn('[Stock] Could not find IMEI or GRADE columns');
+      return gradeMap;
+    }
+
+    // Build IMEI -> GRADE mapping
+    dataRows.forEach((row) => {
+      const imei = row[imeiIndex]?.toString().trim();
+      const grade = row[gradeIndex]?.toString().trim();
+      if (imei && grade) {
+        gradeMap.set(imei, grade);
+      }
+    });
+
+    console.log(`[Stock] Built grade mapping with ${gradeMap.size} entries`);
+    return gradeMap;
+  } catch (error: any) {
+    console.error('[Stock] Error fetching grade mapping:', error.message);
+    return gradeMap;
+  }
+}
+
 async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRow[]> {
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
+    // First, fetch the Stock sheet to get IMEI-to-GRADE mapping
+    console.log('[Raw Inventory] Fetching grade mapping from Stock sheet...');
+    const gradeMap = await fetchStockGradeMapping(auth);
+
     // Fetch columns M:S which contain the "REMAIN" inventory after removals
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: RAW_INVENTORY_SPREADSHEET_ID,
@@ -276,21 +350,29 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
       return value ? value.toString().trim() : undefined;
     };
 
-    const rawInventoryItems: RawInventoryRow[] = dataRows.map((row) => ({
-      label: getColumnValue(row, 'LABEL'),
-      imei: getColumnValue(row, 'IMEI'),
-      model: getColumnValue(row, 'MODEL'),
-      gb: getColumnValue(row, 'GB'),
-      color: getColumnValue(row, 'COLOR'),
-      lockStatus: getColumnValue(row, 'LOCK STATUS'),
-      date: getColumnValue(row, 'DATE'),
-    }));
+    const rawInventoryItems: RawInventoryRow[] = dataRows.map((row) => {
+      const imei = getColumnValue(row, 'IMEI');
+      return {
+        label: getColumnValue(row, 'LABEL'),
+        imei: imei,
+        model: getColumnValue(row, 'MODEL'),
+        gb: getColumnValue(row, 'GB'),
+        color: getColumnValue(row, 'COLOR'),
+        lockStatus: getColumnValue(row, 'LOCK STATUS'),
+        date: getColumnValue(row, 'DATE'),
+        grade: imei ? gradeMap.get(imei) : undefined, // Lookup grade from Stock sheet
+      };
+    });
 
     console.log(`[${RAW_INVENTORY_SHEET}] Sample item:`, rawInventoryItems[0]);
 
     // Filter out items without IMEIs
     const validItems = rawInventoryItems.filter(item => item.imei);
+
+    // Count how many items have grades
+    const itemsWithGrades = validItems.filter(item => item.grade).length;
     console.log(`[${RAW_INVENTORY_SHEET}] Final count: ${validItems.length} items with valid IMEIs`);
+    console.log(`[${RAW_INVENTORY_SHEET}] Items with grade: ${itemsWithGrades} (${Math.round(itemsWithGrades / validItems.length * 100)}%)`);
 
     return validItems;
   } catch (error: any) {
