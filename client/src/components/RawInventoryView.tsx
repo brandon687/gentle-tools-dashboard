@@ -31,6 +31,7 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
   const [expandedModelGB, setExpandedModelGB] = useState<Set<string>>(new Set());
   const [expandedSupplierGrade, setExpandedSupplierGrade] = useState<Set<string>>(new Set());
   const [expandedCartons, setExpandedCartons] = useState<Set<string>>(new Set());
+  const [expandedSummaryCards, setExpandedSummaryCards] = useState<Set<string>>(new Set());
 
   // Group items: Model+GB -> Supplier+Grade -> Master Carton -> Items
   const groupedData = useMemo(() => {
@@ -143,9 +144,32 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
     });
   };
 
+  const toggleSummaryCard = (key: string) => {
+    setExpandedSummaryCards(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
   // Calculate summary statistics by Supplier + Grade across all models
   const supplierGradeSummary = useMemo(() => {
-    const summaryMap = new Map<string, { supplier: string; grade: string; deviceCount: number; cartonCount: number }>();
+    const summaryMap = new Map<string, {
+      supplier: string;
+      grade: string;
+      deviceCount: number;
+      cartonCount: number;
+      modelBreakdown: Array<{
+        model: string;
+        gb: string;
+        deviceCount: number;
+        masterCartons: MasterCartonGroup[];
+      }>;
+    }>();
 
     groupedData.forEach((group) => {
       group.supplierGradeGroups.forEach((sg) => {
@@ -155,12 +179,24 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
         if (existing) {
           existing.deviceCount += sg.totalDevices;
           existing.cartonCount += sg.masterCartons.length;
+          existing.modelBreakdown.push({
+            model: group.model,
+            gb: group.gb,
+            deviceCount: sg.totalDevices,
+            masterCartons: sg.masterCartons,
+          });
         } else {
           summaryMap.set(key, {
             supplier: sg.supplier,
             grade: sg.grade,
             deviceCount: sg.totalDevices,
             cartonCount: sg.masterCartons.length,
+            modelBreakdown: [{
+              model: group.model,
+              gb: group.gb,
+              deviceCount: sg.totalDevices,
+              masterCartons: sg.masterCartons,
+            }],
           });
         }
       });
@@ -185,31 +221,86 @@ export default function RawInventoryView({ items }: RawInventoryViewProps) {
             INVENTORY BY SUPPLIER & GRADE
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {supplierGradeSummary.map((summary) => (
-              <Card key={`${summary.supplier}|${summary.grade}`} className="overflow-hidden">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <Badge variant="default" className="font-semibold">
-                        {summary.grade}
-                      </Badge>
+            {supplierGradeSummary.map((summary) => {
+              const summaryKey = `${summary.supplier}|${summary.grade}`;
+              const isExpanded = expandedSummaryCards.has(summaryKey);
+
+              return (
+                <Card key={summaryKey} className="overflow-hidden">
+                  <button
+                    onClick={() => toggleSummaryCard(summaryKey)}
+                    className="w-full p-4 text-left hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        )}
+                        <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <Badge variant="default" className="font-semibold">
+                          {summary.grade}
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="font-semibold text-sm truncate">
-                      {summary.supplier}
-                    </p>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{summary.cartonCount} cartons</span>
-                      <Badge variant="secondary" className="text-xs px-2 py-0">
-                        {summary.deviceCount}
-                      </Badge>
+                    <div className="space-y-1">
+                      <p className="font-semibold text-sm truncate">
+                        {summary.supplier}
+                      </p>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{summary.cartonCount} cartons</span>
+                        <Badge variant="secondary" className="text-xs px-2 py-0">
+                          {summary.deviceCount}
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </button>
+
+                  {/* Expanded Content: Model+GB and Master Cartons */}
+                  {isExpanded && (
+                    <div className="border-t bg-muted/10 p-3 space-y-2">
+                      {summary.modelBreakdown.map((modelData) => (
+                        <div key={`${summaryKey}|${modelData.model}|${modelData.gb}`} className="space-y-1">
+                          {/* Model + GB Header */}
+                          <div className="flex items-center justify-between px-2 py-1 bg-background rounded">
+                            <div className="flex items-center gap-2">
+                              <Package className="h-3 w-3 text-muted-foreground" />
+                              <span className="font-semibold text-xs">
+                                {modelData.model} {modelData.gb}
+                              </span>
+                            </div>
+                            <Badge variant="secondary" className="text-xs px-2 py-0">
+                              {modelData.deviceCount}
+                            </Badge>
+                          </div>
+
+                          {/* Master Cartons List */}
+                          <div className="pl-6 space-y-1">
+                            {modelData.masterCartons.map((carton) => (
+                              <div
+                                key={`${summaryKey}|${modelData.model}|${modelData.gb}|${carton.label}`}
+                                className="flex items-center justify-between px-2 py-1 text-xs bg-background/50 rounded"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Box className="h-3 w-3 text-muted-foreground" />
+                                  <span className="font-mono font-medium">
+                                    {carton.label}
+                                  </span>
+                                </div>
+                                <span className="text-muted-foreground">
+                                  {carton.items.length}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
