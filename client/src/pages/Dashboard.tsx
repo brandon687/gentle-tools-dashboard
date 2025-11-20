@@ -42,8 +42,9 @@ export default function Dashboard() {
   const [filterLockStatus, setFilterLockStatus] = useState("");
   const [searchIMEI, setSearchIMEI] = useState("");
 
-  // Shipped IMEIs fetched from server
-  const { data: shippedIMEIs = [], refetch: refetchShippedIMEIs } = useQuery<string[]>({
+  // Shipped IMEIs fetched from server (can be string[] for legacy or ShippedImei[] for new format)
+  type ShippedImeiData = string | { imei: string; source?: string; model?: string; grade?: string; supplier?: string };
+  const { data: shippedIMEIs = [], refetch: refetchShippedIMEIs } = useQuery<ShippedImeiData[]>({
     queryKey: ['/api/shipped-imeis'],
     refetchOnWindowFocus: true,
     staleTime: 0, // Always fetch fresh data
@@ -61,29 +62,43 @@ export default function Dashboard() {
 
     // Physical inventory - excludes shipped IMEIs (live adjusted view)
     if (activeDataset === 'physical') {
-      const shippedSet = new Set(shippedIMEIs);
+      // Handle both string format (legacy) and object format (new)
+      const shippedSet = new Set(
+        shippedIMEIs.map(item => typeof item === 'string' ? item : item.imei)
+      );
       return inventoryData.physicalInventory.filter(item => !shippedSet.has(item.imei || ''));
     }
 
-    // Raw inventory - shows all items from the raw inventory sheet
+    // Raw inventory - excludes shipped IMEIs (live adjusted view like physical)
     if (activeDataset === 'raw') {
-      // Convert raw inventory items to InventoryItem format for consistent display
-      return (inventoryData.rawInventory || []).map(item => ({
-        imei: item.imei,
-        model: item.model,
-        gb: item.gb,
-        color: item.color,
-        lockStatus: item.lockStatus,
-        date: item.date,
-        grade: item.grade || item.label, // Use grade from Inbound sheet, fallback to label (master carton)
-        concat: item.label, // Store master carton label in concat field for grouping
-        age: item.supplier, // Store supplier in age field (repurposing unused field)
-      }));
+      // Create a set of shipped IMEIs for efficient lookup
+      // Handle both string format (legacy) and object format (new)
+      const shippedSet = new Set(
+        shippedIMEIs.map(item => typeof item === 'string' ? item : item.imei)
+      );
+
+      // Filter out shipped IMEIs from raw inventory
+      return (inventoryData.rawInventory || [])
+        .filter(item => !shippedSet.has(item.imei || ''))
+        .map(item => ({
+          imei: item.imei,
+          model: item.model,
+          gb: item.gb,
+          color: item.color,
+          lockStatus: item.lockStatus,
+          date: item.date,
+          grade: item.grade || item.label, // Use grade from Inbound sheet, fallback to label (master carton)
+          concat: item.label, // Store master carton label in concat field for grouping
+          age: item.supplier, // Store supplier in age field (repurposing unused field)
+        }));
     }
 
     // Reconciled inventory - only shows items that have been marked as shipped
     if (activeDataset === 'reconciled') {
-      const shippedSet = new Set(shippedIMEIs);
+      // Handle both string format (legacy) and object format (new)
+      const shippedSet = new Set(
+        shippedIMEIs.map(item => typeof item === 'string' ? item : item.imei)
+      );
       return inventoryData.physicalInventory.filter(item => shippedSet.has(item.imei || ''));
     }
 

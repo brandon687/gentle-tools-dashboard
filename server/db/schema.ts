@@ -325,13 +325,20 @@ export type UserActivityStats = typeof userActivityStats.$inferSelect;
 export type NewUserActivityStats = typeof userActivityStats.$inferInsert;
 
 // ============================================================================
-// SHIPPED IMEIs (LEGACY - Keep for backward compatibility)
+// SHIPPED IMEIs (Enhanced with source tracking and metadata)
 // ============================================================================
 export const shippedImeis = pgTable("shipped_imeis", {
   id: uuid("id").defaultRandom().primaryKey(),
   imei: text("imei").notNull().unique(),
+  source: text("source").notNull().default('unknown'), // 'physical', 'raw', or 'unknown'
+  model: text("model"),
+  grade: text("grade"),
+  supplier: text("supplier"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  sourceIdx: index("idx_shipped_imeis_source").on(table.source),
+  createdAtIdx: index("idx_shipped_imeis_created_at").on(table.createdAt),
+}));
 
 export type ShippedImei = typeof shippedImeis.$inferSelect;
 export type NewShippedImei = typeof shippedImeis.$inferInsert;

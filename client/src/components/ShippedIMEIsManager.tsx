@@ -2,22 +2,60 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, Trash2, Copy, Download } from "lucide-react";
+import { Package, Trash2, Copy, Download, AlertTriangle, CheckCircle, HelpCircle, Smartphone, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+interface ShippedIMEI {
+  imei: string;
+  source?: 'physical' | 'raw' | 'unknown';
+  model?: string;
+  grade?: string;
+  supplier?: string;
+  createdAt?: string;
+}
+
+interface ValidationResult {
+  imei: string;
+  found: boolean;
+  source: 'physical' | 'raw' | 'unknown';
+  model?: string;
+  grade?: string;
+  supplier?: string;
+}
+
+interface AddIMEIsResponse {
+  success: boolean;
+  stats: {
+    total: number;
+    found: number;
+    notFound: number;
+    physical: number;
+    raw: number;
+    unknown: number;
+    inserted: number;
+    skipped: number;
+  };
+  validationResults: ValidationResult[];
+  allImeis: string[];
+  message: string;
+}
 
 interface ShippedIMEIsManagerProps {
-  shippedIMEIs: string[];
+  shippedIMEIs: (string | ShippedIMEI)[];
   onUpdateShippedIMEIs: () => void;
 }
 
 export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs }: ShippedIMEIsManagerProps) {
   const [inputText, setInputText] = useState("");
+  const [lastValidationResults, setLastValidationResults] = useState<ValidationResult[]>([]);
+  const [showValidationDetails, setShowValidationDetails] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const addIMEIsMutation = useMutation({
+  const addIMEIsMutation = useMutation<AddIMEIsResponse, Error, string[]>({
     mutationFn: async (imeis: string[]) => {
       const res = await fetch('/api/shipped-imeis', {
         method: 'POST',
@@ -27,7 +65,11 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
       if (!res.ok) throw new Error('Failed to add IMEIs');
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Store validation results for display
+      setLastValidationResults(data.validationResults || []);
+      setShowValidationDetails(true);
+
       queryClient.invalidateQueries({ queryKey: ['/api/shipped-imeis'] });
       onUpdateShippedIMEIs();
     },
@@ -67,13 +109,34 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
       .map(line => line.trim())
       .filter(line => line.length > 0);
 
-    await addIMEIsMutation.mutateAsync(lines);
+    const result = await addIMEIsMutation.mutateAsync(lines);
     setInputText("");
 
-    toast({
-      title: "IMEIs Added",
-      description: `${lines.length} IMEI(s) added to dump list`,
-    });
+    // Show detailed toast with validation results
+    if (result && result.stats) {
+      const { stats } = result;
+      toast({
+        title: "IMEIs Processed",
+        description: result.message,
+      });
+
+      // Show warning if some IMEIs were not found
+      if (stats.notFound > 0) {
+        setTimeout(() => {
+          toast({
+            title: "Warning",
+            description: `${stats.notFound} IMEI(s) were not found in any inventory but were still added to the dump list.`,
+            variant: "destructive",
+          });
+        }, 500);
+      }
+    } else {
+      // Fallback for legacy response
+      toast({
+        title: "IMEIs Added",
+        description: `${lines.length} IMEI(s) added to dump list`,
+      });
+    }
   };
 
   const handleClearAll = async () => {
@@ -87,7 +150,11 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
   };
 
   const handleCopyList = () => {
-    navigator.clipboard.writeText(shippedIMEIs.join('\n'));
+    // Extract just the IMEIs for copying
+    const imeiList = shippedIMEIs.map(item =>
+      typeof item === 'string' ? item : item.imei
+    );
+    navigator.clipboard.writeText(imeiList.join('\n'));
     toast({
       title: "Copied",
       description: "Dump IMEIs copied to clipboard",
@@ -95,7 +162,22 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
   };
 
   const handleDownloadCSV = () => {
-    const csv = shippedIMEIs.join('\n');
+    // Create CSV with metadata if available
+    const headers = ['IMEI', 'Source', 'Model', 'Grade', 'Supplier'];
+    const rows = shippedIMEIs.map(item => {
+      if (typeof item === 'string') {
+        return [item, '', '', '', ''];
+      }
+      return [
+        item.imei,
+        item.source || '',
+        item.model || '',
+        item.grade || '',
+        item.supplier || ''
+      ];
+    });
+
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -106,7 +188,7 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
 
     toast({
       title: "Downloaded",
-      description: "Dump IMEIs downloaded as CSV",
+      description: "Dump IMEIs downloaded as CSV with metadata",
     });
   };
 
@@ -127,7 +209,7 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
             Add Dump IMEIs
           </CardTitle>
           <CardDescription>
-            Paste IMEIs (one per line) for items that have been shipped or ordered. These will be excluded from the Physical Inventory count.
+            Paste IMEIs (one per line) for items that have been shipped or ordered. These will be excluded from both Physical and Raw Inventory counts. The system will validate each IMEI and show where it was found.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -196,25 +278,101 @@ export default function ShippedIMEIsManager({ shippedIMEIs, onUpdateShippedIMEIs
               <p className="text-sm">Add IMEIs above to track items</p>
             </div>
           ) : (
-            <div className="border rounded-lg max-h-[400px] overflow-y-auto">
-              <div className="divide-y">
-                {shippedIMEIs.map((imei, index) => (
-                  <div key={imei} className="flex items-center justify-between p-3 hover:bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-8">#{index + 1}</span>
-                      <span className="font-mono text-sm">{imei}</span>
+            <>
+              {/* Validation Results Alert (if any) */}
+              {showValidationDetails && lastValidationResults.length > 0 && (
+                <Alert className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Last Import Results</AlertTitle>
+                  <AlertDescription>
+                    <div className="space-y-2 mt-2">
+                      <div className="flex gap-4 text-sm">
+                        <span>
+                          <CheckCircle className="inline w-3 h-3 mr-1 text-green-600" />
+                          Found: {lastValidationResults.filter(r => r.found).length}
+                        </span>
+                        <span>
+                          <HelpCircle className="inline w-3 h-3 mr-1 text-orange-600" />
+                          Not Found: {lastValidationResults.filter(r => !r.found).length}
+                        </span>
+                      </div>
+                      <div className="flex gap-4 text-sm">
+                        <span>
+                          <Smartphone className="inline w-3 h-3 mr-1" />
+                          Physical: {lastValidationResults.filter(r => r.source === 'physical').length}
+                        </span>
+                        <span>
+                          <Warehouse className="inline w-3 h-3 mr-1" />
+                          Raw: {lastValidationResults.filter(r => r.source === 'raw').length}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowValidationDetails(false)}
+                        className="p-0 h-auto"
+                      >
+                        Dismiss
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveIMEI(imei)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="border rounded-lg max-h-[400px] overflow-y-auto">
+                <div className="divide-y">
+                  {shippedIMEIs.map((item, index) => {
+                    const imei = typeof item === 'string' ? item : item.imei;
+                    const source = typeof item === 'string' ? undefined : item.source;
+                    const model = typeof item === 'string' ? undefined : item.model;
+                    const grade = typeof item === 'string' ? undefined : item.grade;
+                    const supplier = typeof item === 'string' ? undefined : item.supplier;
+
+                    return (
+                      <div key={imei} className="flex items-center justify-between p-3 hover:bg-muted/50">
+                        <div className="flex items-center gap-3 flex-1">
+                          <span className="text-xs text-muted-foreground w-8">#{index + 1}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm">{imei}</span>
+                              {source && (
+                                <Badge
+                                  variant={
+                                    source === 'physical' ? 'default' :
+                                    source === 'raw' ? 'secondary' :
+                                    'outline'
+                                  }
+                                  className="text-xs"
+                                >
+                                  {source === 'physical' && <Smartphone className="w-3 h-3 mr-1" />}
+                                  {source === 'raw' && <Warehouse className="w-3 h-3 mr-1" />}
+                                  {source === 'unknown' && <HelpCircle className="w-3 h-3 mr-1" />}
+                                  {source}
+                                </Badge>
+                              )}
+                            </div>
+                            {(model || grade || supplier) && (
+                              <div className="text-xs text-muted-foreground mt-1 flex gap-3">
+                                {model && <span>Model: {model}</span>}
+                                {grade && <span>Grade: {grade}</span>}
+                                {supplier && <span>Supplier: {supplier}</span>}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveIMEI(imei)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>

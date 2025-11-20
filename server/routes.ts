@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { fetchInventoryData } from "./lib/googleSheets";
 import { db, shippedImeis, googleSheetsSyncLog, inventoryItems } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { syncGoogleSheetsToDatabase, getLatestSyncStatus } from "./lib/inventorySync";
 import { syncOutboundImeis } from "./lib/outboundSync";
@@ -149,14 +149,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all shipped IMEIs
+  // Get all shipped IMEIs (with metadata)
   app.get('/api/shipped-imeis', requireAuth, async (req, res) => {
     try {
       if (useInMemory) {
+        // For in-memory mode, return simple strings for backward compatibility
         res.json(inMemoryShippedIMEIs);
       } else {
-        const imeis = await db.select().from(shippedImeis);
-        res.json(imeis.map(row => row.imei));
+        const imeis = await db.select().from(shippedImeis).orderBy(desc(shippedImeis.createdAt));
+
+        // Check if client expects full objects (new format) or just strings (legacy)
+        const acceptFullObjects = req.query.format === 'full';
+
+        if (acceptFullObjects) {
+          // Return full objects with metadata
+          res.json(imeis);
+        } else {
+          // Legacy format - just IMEI strings for backward compatibility
+          res.json(imeis.map(row => row.imei));
+        }
       }
     } catch (error: any) {
       console.error('Error in /api/shipped-imeis GET:', error);
@@ -167,7 +178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add shipped IMEIs (bulk)
+  // Add shipped IMEIs (bulk) with validation
   app.post('/api/shipped-imeis', requireAuth, async (req, res) => {
     try {
       const { imeis } = req.body;
@@ -177,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (useInMemory) {
-        // In-memory storage
+        // In-memory storage (legacy mode - no validation)
         const newImeis = imeis.map(i => i.trim());
         inMemoryShippedIMEIs = [...new Set([...inMemoryShippedIMEIs, ...newImeis])];
 
@@ -188,9 +199,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         res.json(inMemoryShippedIMEIs);
       } else {
-        // Database storage - batch insert with chunking for large datasets
-        const cleanedImeis = imeis.map(imei => imei.trim());
-        const values = cleanedImeis.map(imei => ({ imei }));
+        // Clean and deduplicate IMEIs
+        const cleanedImeis = [...new Set(imeis.map(imei => imei.trim()))];
+
+        // Validate IMEIs against both inventories
+        console.log(`[Shipped IMEIs] Validating ${cleanedImeis.length} IMEIs...`);
+        const { validateIMEIs } = await import('./lib/imeiValidation');
+        const validationResults = await validateIMEIs(cleanedImeis);
+
+        // Prepare values for insertion with metadata
+        const values = validationResults.map(result => ({
+          imei: result.imei,
+          source: result.source,
+          model: result.model || null,
+          grade: result.grade || null,
+          supplier: result.supplier || null,
+        }));
+
+        // Track validation statistics
+        const stats = {
+          total: validationResults.length,
+          found: validationResults.filter(r => r.found).length,
+          notFound: validationResults.filter(r => !r.found).length,
+          physical: validationResults.filter(r => r.source === 'physical').length,
+          raw: validationResults.filter(r => r.source === 'raw').length,
+          unknown: validationResults.filter(r => r.source === 'unknown').length,
+        };
+
+        console.log(`[Shipped IMEIs] Validation stats:`, stats);
 
         // Chunk into batches of 500 to avoid parameter limits
         const BATCH_SIZE = 500;
@@ -200,11 +236,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Insert each chunk in a transaction
+        let inserted = 0;
+        let skipped = 0;
         await db.transaction(async (tx) => {
           for (const chunk of chunks) {
-            await tx.insert(shippedImeis)
+            const result = await tx.insert(shippedImeis)
               .values(chunk)
-              .onConflictDoNothing(); // Ignore duplicates
+              .onConflictDoNothing() // Ignore duplicates
+              .returning({ imei: shippedImeis.imei });
+
+            inserted += result.length;
+            skipped += chunk.length - result.length;
           }
         });
 
@@ -213,9 +255,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await logImeiDumpAdd(req.user.id, req.user.email, cleanedImeis, req);
         }
 
-        // Return updated list
-        const allImeis = await db.select().from(shippedImeis);
-        res.json(allImeis.map(row => row.imei));
+        // Return detailed response with validation results
+        const allImeis = await db.select().from(shippedImeis).orderBy(desc(shippedImeis.createdAt));
+
+        res.json({
+          success: true,
+          stats: {
+            ...stats,
+            inserted,
+            skipped,
+          },
+          validationResults,
+          allImeis: allImeis.map(row => row.imei), // Legacy format for backward compatibility
+          message: `Added ${inserted} new IMEIs${skipped > 0 ? ` (${skipped} duplicates skipped)` : ''}. Found ${stats.found} in inventory (${stats.physical} physical, ${stats.raw} raw), ${stats.notFound} not found.`
+        });
       }
     } catch (error: any) {
       console.error('Error in /api/shipped-imeis POST:', error);
