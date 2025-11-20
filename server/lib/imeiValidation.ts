@@ -43,22 +43,37 @@ export async function validateIMEIs(imeis: string[]): Promise<IMEIValidationResu
   try {
     // Step 1: Check Physical Inventory (database)
     console.log('[IMEI Validation] Checking physical inventory...');
-    const physicalItems = await db
-      .select()
-      .from(inventoryItems)
-      .where(eq(inventoryItems.isActive, true));
+
+    let physicalItems: any[] = [];
+    try {
+      if (db) {
+        physicalItems = await db
+          .select()
+          .from(inventoryItems)
+          .where(eq(inventoryItems.isActive, true));
+        console.log(`[IMEI Validation] Found ${physicalItems.length} active items in physical inventory database`);
+      } else {
+        console.warn('[IMEI Validation] Database is null, skipping physical inventory check');
+      }
+    } catch (dbError) {
+      console.error('[IMEI Validation] Error querying physical inventory database:', dbError);
+      // Continue to raw inventory check even if DB fails
+    }
 
     const physicalImeiMap = new Map<string, typeof physicalItems[0]>();
     physicalItems.forEach(item => {
       if (item.imei) {
-        physicalImeiMap.set(item.imei, item);
+        physicalImeiMap.set(item.imei.trim(), item);
       }
     });
+
+    console.log(`[IMEI Validation] Physical IMEI map contains ${physicalImeiMap.size} unique IMEIs`);
 
     // Update results for IMEIs found in physical inventory
     cleanedImeis.forEach(imei => {
       const physicalItem = physicalImeiMap.get(imei);
       if (physicalItem) {
+        console.log(`[IMEI Validation] Found ${imei} in physical inventory`);
         results.set(imei, {
           imei,
           found: true,
