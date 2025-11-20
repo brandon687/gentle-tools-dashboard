@@ -139,6 +139,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/inventory', requireAuth, async (req, res) => {
     try {
       const data = await fetchInventoryData();
+
+      // Cache raw inventory for validation use (5 minute TTL)
+      if (data.rawInventory && data.rawInventory.length > 0) {
+        const { inventoryCache } = await import('./lib/inventoryCache');
+        inventoryCache.set('raw-inventory', data.rawInventory, 5 * 60 * 1000);
+        console.log(`[Inventory] Cached ${data.rawInventory.length} raw inventory items for validation`);
+      }
+
       res.json(data);
     } catch (error: any) {
       console.error('Error in /api/inventory:', error);

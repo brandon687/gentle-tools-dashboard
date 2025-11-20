@@ -3,6 +3,7 @@ import { inventoryItems } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { fetchInventoryData } from "./googleSheets";
 import type { RawInventoryRow } from "./googleSheets";
+import { inventoryCache } from "./inventoryCache";
 
 export interface IMEIValidationResult {
   imei: string;
@@ -88,20 +89,36 @@ export async function validateIMEIs(imeis: string[]): Promise<IMEIValidationResu
       }
     });
 
-    // Step 2: Check Raw Inventory (Google Sheets)
+    // Step 2: Check Raw Inventory (Google Sheets with caching)
     console.log('[IMEI Validation] Fetching raw inventory from Google Sheets...');
 
     let rawInventory: RawInventoryRow[] = [];
     let googleSheetsError = false;
+    let usedCache = false;
 
-    try {
-      const inventoryData = await fetchInventoryData();
-      rawInventory = inventoryData.rawInventory || [];
-      console.log(`[IMEI Validation] ✅ Successfully fetched raw inventory: ${rawInventory.length} items`);
-    } catch (sheetsError) {
-      console.error('[IMEI Validation] ⚠️  Failed to fetch raw inventory from Google Sheets:', sheetsError);
-      googleSheetsError = true;
-      // Continue with empty array - we'll mark these as unknown but still allow the dump
+    // Try cache first
+    const cachedRawInventory = inventoryCache.get('raw-inventory');
+    if (cachedRawInventory && cachedRawInventory.length > 0) {
+      rawInventory = cachedRawInventory;
+      usedCache = true;
+      console.log(`[IMEI Validation] ✅ Using cached raw inventory: ${rawInventory.length} items`);
+    } else {
+      // Cache miss or empty - fetch fresh
+      try {
+        console.log('[IMEI Validation] Cache miss - fetching fresh from Google Sheets...');
+        const inventoryData = await fetchInventoryData();
+        rawInventory = inventoryData.rawInventory || [];
+        console.log(`[IMEI Validation] ✅ Successfully fetched raw inventory: ${rawInventory.length} items`);
+
+        // Store in cache for future use (5 minute TTL)
+        if (rawInventory.length > 0) {
+          inventoryCache.set('raw-inventory', rawInventory, 5 * 60 * 1000);
+        }
+      } catch (sheetsError) {
+        console.error('[IMEI Validation] ⚠️  Failed to fetch raw inventory from Google Sheets:', sheetsError);
+        googleSheetsError = true;
+        // Continue with empty array - we'll mark these as unknown but still allow the dump
+      }
     }
 
     console.log(`[IMEI Validation] Raw inventory contains ${rawInventory.length} total items`);
