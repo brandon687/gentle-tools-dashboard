@@ -78,19 +78,33 @@ export async function validateIMEIs(imeis: string[]): Promise<IMEIValidationResu
     const inventoryData = await fetchInventoryData();
     const rawInventory = inventoryData.rawInventory || [];
 
+    console.log(`[IMEI Validation] Raw inventory contains ${rawInventory.length} total items`);
+
     const rawImeiMap = new Map<string, RawInventoryRow>();
     rawInventory.forEach(item => {
       if (item.imei) {
-        rawImeiMap.set(item.imei, item);
+        const cleanedImei = item.imei.trim();
+        rawImeiMap.set(cleanedImei, item);
       }
     });
+
+    console.log(`[IMEI Validation] Raw IMEI map contains ${rawImeiMap.size} unique IMEIs`);
+    console.log(`[IMEI Validation] Sample IMEIs from raw:`, Array.from(rawImeiMap.keys()).slice(0, 5));
+    console.log(`[IMEI Validation] Looking for IMEIs:`, cleanedImeis);
 
     // Update results for IMEIs found in raw inventory (only if not already found in physical)
     cleanedImeis.forEach(imei => {
       const result = results.get(imei)!;
       if (!result.found) {
         const rawItem = rawImeiMap.get(imei);
+        console.log(`[IMEI Validation] Checking raw for ${imei}: ${rawItem ? 'FOUND' : 'NOT FOUND'}`);
         if (rawItem) {
+          console.log(`[IMEI Validation] Raw item data:`, {
+            imei: rawItem.imei,
+            model: rawItem.model,
+            grade: rawItem.grade,
+            supplier: rawItem.supplier,
+          });
           results.set(imei, {
             imei,
             found: true,
