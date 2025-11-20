@@ -207,6 +207,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { validateIMEIs } = await import('./lib/imeiValidation');
         const validationResults = await validateIMEIs(cleanedImeis);
 
+        // Warn if validation might be incomplete
+        const rawCount = validationResults.filter(r => r.source === 'raw').length;
+        const unknownCount = validationResults.filter(r => r.source === 'unknown').length;
+        if (rawCount === 0 && unknownCount > 0) {
+          console.warn(`[Shipped IMEIs] ⚠️  No IMEIs were found in raw inventory. This might indicate:
+            1. Raw inventory fetch failed (Google Sheets API issue)
+            2. Raw inventory is actually empty
+            3. Header detection failed in the sheet
+            Check the logs above for Google Sheets fetch errors.`);
+        }
+
         // Prepare values for insertion with metadata
         const values = validationResults.map(result => ({
           imei: result.imei,
