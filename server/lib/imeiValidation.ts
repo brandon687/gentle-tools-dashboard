@@ -90,8 +90,19 @@ export async function validateIMEIs(imeis: string[]): Promise<IMEIValidationResu
 
     // Step 2: Check Raw Inventory (Google Sheets)
     console.log('[IMEI Validation] Fetching raw inventory from Google Sheets...');
-    const inventoryData = await fetchInventoryData();
-    const rawInventory = inventoryData.rawInventory || [];
+
+    let rawInventory: RawInventoryRow[] = [];
+    let googleSheetsError = false;
+
+    try {
+      const inventoryData = await fetchInventoryData();
+      rawInventory = inventoryData.rawInventory || [];
+      console.log(`[IMEI Validation] ✅ Successfully fetched raw inventory: ${rawInventory.length} items`);
+    } catch (sheetsError) {
+      console.error('[IMEI Validation] ⚠️  Failed to fetch raw inventory from Google Sheets:', sheetsError);
+      googleSheetsError = true;
+      // Continue with empty array - we'll mark these as unknown but still allow the dump
+    }
 
     console.log(`[IMEI Validation] Raw inventory contains ${rawInventory.length} total items`);
 
@@ -104,7 +115,9 @@ export async function validateIMEIs(imeis: string[]): Promise<IMEIValidationResu
     });
 
     console.log(`[IMEI Validation] Raw IMEI map contains ${rawImeiMap.size} unique IMEIs`);
-    console.log(`[IMEI Validation] Sample IMEIs from raw:`, Array.from(rawImeiMap.keys()).slice(0, 5));
+    if (rawImeiMap.size > 0) {
+      console.log(`[IMEI Validation] Sample IMEIs from raw:`, Array.from(rawImeiMap.keys()).slice(0, 5));
+    }
     console.log(`[IMEI Validation] Looking for IMEIs:`, cleanedImeis);
 
     // Update results for IMEIs found in raw inventory (only if not already found in physical)
@@ -141,6 +154,10 @@ export async function validateIMEIs(imeis: string[]): Promise<IMEIValidationResu
     const unknownCount = Array.from(results.values()).filter(r => r.source === 'unknown').length;
 
     console.log(`[IMEI Validation] Results: ${foundCount} found (${physicalCount} physical, ${rawCount} raw), ${unknownCount} not found`);
+
+    if (googleSheetsError && unknownCount > 0) {
+      console.warn(`[IMEI Validation] ⚠️  WARNING: Could not verify ${unknownCount} IMEIs against raw inventory due to Google Sheets fetch failure. These IMEIs may actually exist in raw inventory but couldn't be validated.`);
+    }
 
     return Array.from(results.values());
   } catch (error) {

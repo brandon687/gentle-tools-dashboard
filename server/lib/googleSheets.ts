@@ -315,7 +315,12 @@ async function fetchRawInventoryData(auth: string | JWT): Promise<RawInventoryRo
     }
 
     if (headerRowIndex === -1) {
-      console.error(`[${RAW_INVENTORY_SHEET}] Could not find header row!`);
+      console.error(`[${RAW_INVENTORY_SHEET}] ❌ CRITICAL: Could not find header row in columns M:S!`);
+      console.error(`[${RAW_INVENTORY_SHEET}] Expected headers: LABEL, IMEI, MODEL`);
+      console.error(`[${RAW_INVENTORY_SHEET}] Please check the Google Sheet structure`);
+      console.error(`[${RAW_INVENTORY_SHEET}] Sheet ID: ${RAW_INVENTORY_SPREADSHEET_ID}`);
+      console.error(`[${RAW_INVENTORY_SHEET}] Sheet name: ${RAW_INVENTORY_SHEET}`);
+      console.error(`[${RAW_INVENTORY_SHEET}] Range: M:S (columns 13-19)`);
       return [];
     }
 
