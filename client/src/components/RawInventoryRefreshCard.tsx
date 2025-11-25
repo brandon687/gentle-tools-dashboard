@@ -1,9 +1,9 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, CheckCircle2, AlertCircle, Database } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { InventoryDataResponse } from "@shared/schema";
 
 export function RawInventoryRefreshCard() {
@@ -14,6 +14,23 @@ export function RawInventoryRefreshCard() {
   const [itemCount, setItemCount] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
+
+  // Get the inventory data from React Query to initialize state
+  const { data: inventoryData } = useQuery<InventoryDataResponse>({
+    queryKey: ["/api/inventory"],
+    enabled: false, // Don't auto-fetch, just read from cache
+  });
+
+  // Initialize state from existing cache when component mounts
+  useEffect(() => {
+    if (inventoryData?.rawInventory && itemCount === null) {
+      // Data exists in cache, show it immediately
+      setItemCount(inventoryData.rawInventory.length);
+      setRefreshStatus("success");
+      // Set last refresh to cache timestamp or current time
+      setLastRefresh(new Date());
+    }
+  }, [inventoryData, itemCount]);
 
   const triggerRefresh = async () => {
     setIsRefreshing(true);
@@ -70,7 +87,7 @@ export function RawInventoryRefreshCard() {
                 Refreshing...
               </Badge>
             )}
-            {refreshStatus === "success" && !isRefreshing && (
+            {(refreshStatus === "success" || itemCount !== null) && !isRefreshing && (
               <Badge variant="default" className="bg-green-500">
                 <CheckCircle2 className="h-3 w-3 mr-1" />
                 Up to date
@@ -128,7 +145,7 @@ export function RawInventoryRefreshCard() {
         )}
 
         {/* Success Message */}
-        {refreshStatus === "success" && !isRefreshing && (
+        {(refreshStatus === "success" || itemCount !== null) && !isRefreshing && (
           <div className="bg-green-50 border border-green-200 rounded-md p-3">
             <p className="text-sm text-green-700">
               ✓ Raw inventory refreshed successfully!
@@ -137,7 +154,7 @@ export function RawInventoryRefreshCard() {
         )}
 
         {/* Info Message */}
-        {refreshStatus === "idle" && !lastRefresh && (
+        {refreshStatus === "idle" && !lastRefresh && itemCount === null && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
             <p className="text-sm text-blue-700 flex items-center gap-2">
               <Database className="h-4 w-4" />
