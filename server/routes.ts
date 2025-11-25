@@ -86,11 +86,29 @@ async function cleanupStaleSyncs() {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize table on startup
-  await ensureTableExists();
+  // Initialize database operations with timeout and error handling
+  const initPromise = Promise.race([
+    (async () => {
+      try {
+        console.log('📊 Initializing database tables...');
+        await ensureTableExists();
+        console.log('✅ Database tables initialized');
 
-  // Clean up stale syncs
-  await cleanupStaleSyncs();
+        console.log('🧹 Cleaning up stale syncs...');
+        await cleanupStaleSyncs();
+        console.log('✅ Stale syncs cleaned');
+      } catch (error) {
+        console.warn('⚠️  Database initialization failed (non-critical):', error);
+        console.warn('⚠️  Server will continue with limited functionality');
+      }
+    })(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Database initialization timeout')), 5000)
+    )
+  ]).catch(error => {
+    console.warn('⚠️  Database initialization timed out or failed:', error);
+    console.warn('⚠️  Continuing with in-memory fallback');
+  });
 
   // ============================================================================
   // HEALTH & STATUS CHECK (No auth required for monitoring)

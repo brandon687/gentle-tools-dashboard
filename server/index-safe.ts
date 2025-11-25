@@ -49,20 +49,54 @@ if (!sessionSecret) {
   console.warn('⚠️  Please set SESSION_SECRET environment variable for production.');
 }
 
-// Configure PostgreSQL session store for production
+// Configure PostgreSQL session store for production with better error handling
 const PgSession = connectPgSimple(session);
-const sessionStore = pool ? new PgSession({
-  pool: pool,
-  tableName: 'session', // PostgreSQL table name
-  createTableIfMissing: true, // Auto-create session table
-  pruneSessionInterval: 60 * 15, // Clean up expired sessions every 15 minutes
-}) : undefined;
+let sessionStore: any = undefined;
 
-if (sessionStore) {
-  console.log('✅ Using PostgreSQL session store for persistent sessions');
-} else {
-  console.warn('⚠️  Using MemoryStore for sessions - sessions will be lost on restart');
-}
+// Only create session store if pool exists - wrap in async to prevent blocking
+const initSessionStore = async () => {
+  if (pool) {
+    try {
+      // Test the connection first with a timeout
+      const testConnection = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Database connection timeout'));
+        }, 5000); // 5 second timeout
+
+        pool.query('SELECT 1', (err) => {
+          clearTimeout(timeout);
+          if (err) reject(err);
+          else resolve(true);
+        });
+      });
+
+      await testConnection;
+
+      sessionStore = new PgSession({
+        pool: pool,
+        tableName: 'session',
+        createTableIfMissing: true,
+        pruneSessionInterval: 60 * 15,
+        errorLog: (err: any) => {
+          console.error('Session store error:', err);
+        }
+      });
+      console.log('✅ PostgreSQL session store initialized');
+      return true;
+    } catch (error) {
+      console.error('⚠️  Failed to initialize session store:', error);
+      return false;
+    }
+  }
+  return false;
+};
+
+// Initialize session store asynchronously - don't block startup
+initSessionStore().then((success) => {
+  if (!success) {
+    console.warn('⚠️  Using MemoryStore for sessions - sessions will be lost on restart');
+  }
+});
 
 app.use(
   session({
@@ -127,10 +161,28 @@ app.use((req, res, next) => {
   next();
 });
 
+// Main startup with better error handling and timeouts
 (async () => {
   try {
     console.log('🚀 Starting server initialization...');
-    const server = await registerRoutes(app);
+
+    // Add timeout for route registration
+    const registerWithTimeout = new Promise(async (resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Route registration timeout after 30 seconds'));
+      }, 30000);
+
+      try {
+        const server = await registerRoutes(app);
+        clearTimeout(timeout);
+        resolve(server);
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
+
+    const server = await registerWithTimeout as any;
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -154,14 +206,23 @@ app.use((req, res, next) => {
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
     const port = parseInt(process.env.PORT || '5000', 10);
+
+    // Add server startup timeout
+    const startupTimeout = setTimeout(() => {
+      console.error('❌ Server failed to start within 60 seconds');
+      process.exit(1);
+    }, 60000);
+
     server.listen(port, "0.0.0.0", () => {
+      clearTimeout(startupTimeout);
       log(`✅ Server successfully started on port ${port}`);
       console.log(`🌐 Server is listening on http://0.0.0.0:${port}`);
     });
   } catch (error) {
     console.error('❌ FATAL: Failed to start server:', error);
     console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
-    process.exit(1);
+    // Don't exit immediately - let Railway see the error
+    setTimeout(() => process.exit(1), 1000);
   }
 })();
 
@@ -179,10 +240,12 @@ process.on('SIGINT', () => {
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
   console.error('Stack:', error.stack);
-  process.exit(1);
+  // Give time for error to be logged
+  setTimeout(() => process.exit(1), 1000);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  // Give time for error to be logged
+  setTimeout(() => process.exit(1), 1000);
 });

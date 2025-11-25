@@ -68,11 +68,23 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+  // Fix: Look for public directory in the correct location
+  const distPath = path.resolve(import.meta.dirname, "..", "dist", "public");
 
   if (!fs.existsSync(distPath)) {
+    // Fallback to checking alternate location
+    const alternatePath = path.resolve(import.meta.dirname, "public");
+    if (fs.existsSync(alternatePath)) {
+      console.log(`Using alternate static path: ${alternatePath}`);
+      app.use(express.static(alternatePath));
+      app.use("*", (_req, res) => {
+        res.sendFile(path.resolve(alternatePath, "index.html"));
+      });
+      return;
+    }
+
     throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
+      `Could not find the build directory at ${distPath} or ${alternatePath}. Make sure to run 'npm run build' first.`,
     );
   }
 

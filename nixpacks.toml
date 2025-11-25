@@ -1,11 +1,23 @@
 [phases.setup]
-nixPkgs = ['nodejs_20']
+nixPkgs = ['nodejs_20', 'postgresql']
 
 [phases.install]
-cmds = ['npm ci --include=dev --verbose']
+cmds = [
+  'echo "📦 Installing dependencies..."',
+  'npm ci --include=dev'
+]
 
 [phases.build]
-cmds = ['npm run build']
+cmds = [
+  'echo "🔨 Starting build process..."',
+  'echo "DATABASE_URL status: ${DATABASE_URL:+SET}"',
+  'npm run build',
+  'echo "✅ Build completed successfully"'
+]
 
 [start]
-cmd = 'npm run start'
+cmd = 'node dist/index.js'
+
+[variables]
+NODE_ENV = 'production'
+NODE_OPTIONS = '--max-old-space-size=512'
