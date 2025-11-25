@@ -275,14 +275,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         });
 
-        // Log activity (after successful insertion)
+        // Log activity (after successful insertion) - Run in background
         if (req.user) {
-          await logImeiDumpAdd(req.user.id, req.user.email, cleanedImeis, req);
+          logImeiDumpAdd(req.user.id, req.user.email, cleanedImeis, req).catch(err => {
+            console.error('[Shipped IMEIs] Failed to log activity:', err);
+          });
         }
 
-        // Return detailed response with validation results
-        const allImeis = await db.select().from(shippedImeis).orderBy(desc(shippedImeis.createdAt));
-
+        // Return detailed response WITHOUT fetching all IMEIs (let frontend refetch via query invalidation)
         res.json({
           success: true,
           stats: {
@@ -291,7 +291,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             skipped,
           },
           validationResults,
-          allImeis: allImeis.map(row => row.imei), // Legacy format for backward compatibility
           message: `Added ${inserted} new IMEIs${skipped > 0 ? ` (${skipped} duplicates skipped)` : ''}. Found ${stats.found} in inventory (${stats.physical} physical, ${stats.raw} raw), ${stats.notFound} not found.`
         });
       }

@@ -49,19 +49,44 @@ export async function validateIMEIs(imeis: string[]): Promise<IMEIValidationResu
     let rawInventory: RawInventoryRow[] = [];
     let googleSheetsError = false;
 
-    // Try cache first for both inventories
+    // Try cache first - use partial cache if available (don't require both)
     const cachedPhysicalInventory = inventoryCache.get('physical-inventory');
     const cachedRawInventory = inventoryCache.get('raw-inventory');
 
-    if (cachedPhysicalInventory && cachedPhysicalInventory.length > 0 &&
-        cachedRawInventory && cachedRawInventory.length > 0) {
+    const hasPhysicalCache = cachedPhysicalInventory && cachedPhysicalInventory.length > 0;
+    const hasRawCache = cachedRawInventory && cachedRawInventory.length > 0;
+
+    if (hasPhysicalCache && hasRawCache) {
+      // Best case: both caches available
       physicalInventory = cachedPhysicalInventory;
       rawInventory = cachedRawInventory;
-      console.log(`[IMEI Validation] ✅ Using cached data: ${physicalInventory.length} physical, ${rawInventory.length} raw`);
-    } else {
-      // Cache miss - fetch fresh from Google Sheets
+      console.log(`[IMEI Validation] ✅ Using fully cached data: ${physicalInventory.length} physical, ${rawInventory.length} raw`);
+    } else if (hasPhysicalCache || hasRawCache) {
+      // Partial cache: use what we have and fetch the rest
+      console.log('[IMEI Validation] ⚡ Using partial cache, fetching missing data...');
+      physicalInventory = cachedPhysicalInventory || [];
+      rawInventory = cachedRawInventory || [];
+
       try {
-        console.log('[IMEI Validation] Cache miss - fetching fresh from Google Sheets...');
+        const inventoryData = await fetchInventoryData();
+
+        if (!hasPhysicalCache && inventoryData.physicalInventory) {
+          physicalInventory = inventoryData.physicalInventory;
+          inventoryCache.set('physical-inventory', physicalInventory as any, 5 * 60 * 1000);
+        }
+        if (!hasRawCache && inventoryData.rawInventory) {
+          rawInventory = inventoryData.rawInventory;
+          inventoryCache.set('raw-inventory', rawInventory, 5 * 60 * 1000);
+        }
+        console.log(`[IMEI Validation] ✅ Fetched missing data: ${physicalInventory.length} physical, ${rawInventory.length} raw`);
+      } catch (sheetsError) {
+        console.error('[IMEI Validation] ⚠️  Failed to fetch missing inventory:', sheetsError);
+        googleSheetsError = true;
+      }
+    } else {
+      // No cache: fetch everything
+      try {
+        console.log('[IMEI Validation] ⚡ Cache miss - fetching fresh from Google Sheets...');
         const inventoryData = await fetchInventoryData();
         physicalInventory = inventoryData.physicalInventory || [];
         rawInventory = inventoryData.rawInventory || [];

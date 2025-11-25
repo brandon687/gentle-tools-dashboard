@@ -39,7 +39,7 @@ interface AddIMEIsResponse {
     skipped: number;
   };
   validationResults: ValidationResult[];
-  allImeis: string[];
+  allImeis?: string[]; // Optional - not needed, frontend refetches via query invalidation
   message: string;
 }
 
