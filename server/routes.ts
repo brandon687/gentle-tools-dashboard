@@ -140,9 +140,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = await fetchInventoryData();
 
-      // Cache raw inventory for validation use (5 minute TTL)
+      // Cache BOTH physical and raw inventory for validation use (5 minute TTL)
+      const { inventoryCache } = await import('./lib/inventoryCache');
+
+      if (data.physicalInventory && data.physicalInventory.length > 0) {
+        inventoryCache.set('physical-inventory', data.physicalInventory, 5 * 60 * 1000);
+        console.log(`[Inventory] Cached ${data.physicalInventory.length} physical inventory items for validation`);
+      }
+
       if (data.rawInventory && data.rawInventory.length > 0) {
-        const { inventoryCache } = await import('./lib/inventoryCache');
         inventoryCache.set('raw-inventory', data.rawInventory, 5 * 60 * 1000);
         console.log(`[Inventory] Cached ${data.rawInventory.length} raw inventory items for validation`);
       }

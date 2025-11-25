@@ -1,7 +1,7 @@
 import { RawInventoryRow } from './googleSheets';
 
-interface CacheEntry {
-  data: RawInventoryRow[];
+interface CacheEntry<T = any> {
+  data: T[];
   timestamp: number;
   expiresAt: number;
 }
@@ -10,7 +10,7 @@ class InventoryCache {
   private cache: Map<string, CacheEntry> = new Map();
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 
-  set(key: string, data: RawInventoryRow[], ttl: number = this.DEFAULT_TTL): void {
+  set<T = any>(key: string, data: T[], ttl: number = this.DEFAULT_TTL): void {
     const now = Date.now();
     this.cache.set(key, {
       data,
@@ -20,7 +20,7 @@ class InventoryCache {
     console.log(`[Cache] Stored ${data.length} items with key '${key}', expires in ${ttl}ms`);
   }
 
-  get(key: string): RawInventoryRow[] | null {
+  get<T = any>(key: string): T[] | null {
     const entry = this.cache.get(key);
     if (!entry) {
       console.log(`[Cache] Miss for key '${key}' - not found`);
@@ -36,7 +36,7 @@ class InventoryCache {
 
     const age = now - entry.timestamp;
     console.log(`[Cache] Hit for key '${key}' - ${entry.data.length} items (age: ${age}ms)`);
-    return entry.data;
+    return entry.data as T[];
   }
 
   clear(key?: string): void {
