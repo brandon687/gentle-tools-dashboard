@@ -85,6 +85,10 @@
     "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0"
   },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
     "@replit/vite-plugin-cartographer": "^0.4.1",
