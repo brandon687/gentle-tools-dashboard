@@ -135,6 +135,13 @@ export default function Dashboard() {
     return items;
   }, [currentItems, filterGrade, filterModel, filterGB, filterColor, filterLockStatus, searchIMEI]);
 
+  // Filtered items for PivotView (detailed view) - excludes locked devices
+  const unlockedFilteredItems = useMemo(() => {
+    return filteredItems.filter(item =>
+      item.lockStatus?.toUpperCase() === 'UNLOCKED'
+    );
+  }, [filteredItems]);
+
   const handleViewDetails = useCallback((item: InventoryItem) => {
     setSelectedItem(item);
     setIsSheetOpen(true);
@@ -326,15 +333,15 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <h3 className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
-                  Detailed View
+                  Detailed View (Unlocked Only)
                   <span className="font-normal text-base ml-3 normal-case">
-                    ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
+                    ({unlockedFilteredItems.length} {unlockedFilteredItems.length === 1 ? 'item' : 'items'})
                   </span>
                 </h3>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  <ExportButtons items={filteredItems} />
-                  
+                  <ExportButtons items={unlockedFilteredItems} />
+
                   <Button
                     variant="outline"
                     onClick={() => setIsInvMatchOpen(true)}
@@ -361,11 +368,11 @@ export default function Dashboard() {
                 onClearAll={handleClearFilters}
               />
 
-              {filteredItems.length === 0 ? (
+              {unlockedFilteredItems.length === 0 ? (
                 <EmptyFilterState hasActiveFilters={hasActiveFilters} />
               ) : (
                 <PivotView
-                  items={filteredItems}
+                  items={unlockedFilteredItems}
                   onViewDetails={handleViewDetails}
                 />
               )}
@@ -438,14 +445,14 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <h3 className="text-lg font-semibold text-muted-foreground uppercase tracking-wide">
-                  Detailed View
+                  Detailed View (Unlocked Only)
                   <span className="font-normal text-base ml-3 normal-case">
-                    ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
+                    ({unlockedFilteredItems.length} {unlockedFilteredItems.length === 1 ? 'item' : 'items'})
                   </span>
                 </h3>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  <ExportButtons items={filteredItems} />
+                  <ExportButtons items={unlockedFilteredItems} />
                 </div>
               </div>
 
@@ -464,11 +471,11 @@ export default function Dashboard() {
                 onClearAll={handleClearFilters}
               />
 
-              {filteredItems.length === 0 ? (
+              {unlockedFilteredItems.length === 0 ? (
                 <EmptyFilterState hasActiveFilters={hasActiveFilters} />
               ) : (
                 <PivotView
-                  items={filteredItems}
+                  items={unlockedFilteredItems}
                   onViewDetails={handleViewDetails}
                 />
               )}
